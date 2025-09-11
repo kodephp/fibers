@@ -4,106 +4,184 @@ declare(strict_types=1);
 
 namespace Nova\Fibers\Task;
 
+use Closure;
+use Fiber;
 use Nova\Fibers\Contracts\Runnable;
-use Nova\Fibers\Core\FiberPool;
 use Nova\Fibers\Support\Environment;
+use RuntimeException;
 use Throwable;
 
 /**
  * 任务执行器
- *
- * @package Nova\Fibers\Task
+ * 
+ * 提供任务运行、超时控制等功能
  */
 class TaskRunner
 {
     /**
      * 运行任务
-     *
+     * 
      * @param callable|Runnable $task 任务
-     * @param array $context 上下文数据
-     * @return mixed 任务执行结果
-     * @throws Throwable
+     * @param float|null $timeout 超时时间（秒）
+     * @return mixed 任务结果
+     * @throws RuntimeException
      */
-    public static function run(callable|Runnable $task, array $context = []): mixed
+    public static function run(callable|Runnable $task, ?float $timeout = null): mixed
     {
-        // 检查环境是否支持纤程
+        // 检查环境支持
         if (!Environment::checkFiberSupport()) {
-            throw new \RuntimeException('Fiber support is not available in this environment.');
+            throw new RuntimeException('Fiber requires PHP 8.1 or higher');
         }
 
-        // 如果是 Runnable 接口实例，调用 run 方法
-        if ($task instanceof Runnable) {
-            return $task->run($context);
+        // 如果没有设置超时，直接执行任务
+        if ($timeout === null) {
+            if ($task instanceof Runnable) {
+                return $task->run();
+            }
+
+            return $task();
         }
 
-        // 如果是闭包或可调用对象，直接执行
-        if (is_callable($task)) {
-            return $task($context);
-        }
-
-        throw new \InvalidArgumentException('Task must be callable or implement Runnable interface.');
+        // 使用超时控制执行任务
+        return self::runWithTimeout($task, $timeout);
     }
 
     /**
-     * 并行运行多个任务
-     *
+     * 并发运行多个任务
+     * 
      * @param array $tasks 任务数组
-     * @param array $options 纤程池选项
-     * @return array 执行结果数组
-     * @throws Throwable
+     * @param float|null $timeout 超时时间（秒）
+     * @return array 任务结果
+     * @throws RuntimeException
      */
-    public static function concurrent(array $tasks, array $options = []): array
+    public static function concurrent(array $tasks, ?float $timeout = null): array
     {
-        // 检查环境是否支持纤程
+        // 检查环境支持
         if (!Environment::checkFiberSupport()) {
-            throw new \RuntimeException('Fiber support is not available in this environment.');
+            throw new RuntimeException('Fiber requires PHP 8.1 or higher');
         }
 
-        // 创建纤程池
-        $pool = new FiberPool($options);
+        $results = [];
+        $fibers = [];
+        $exceptions = [];
 
-        // 提交任务并获取结果
-        return $pool->concurrent($tasks);
+        // 创建纤程执行任务
+        foreach ($tasks as $key => $task) {
+            $fiber = new Fiber(function () use ($task) {
+                try {
+                    if ($task instanceof Runnable) {
+                        return $task->run();
+                    }
+
+                    if (is_callable($task)) {
+                        return $task();
+                    }
+
+                    throw new \InvalidArgumentException('Task must be callable or implement Runnable interface');
+                } catch (Throwable $e) {
+                    return $e;
+                }
+            });
+
+            $fiber->start();
+            $fibers[$key] = $fiber;
+        }
+
+        // 等待所有任务完成或超时
+        $startTime = microtime(true);
+        $hasTimeout = $timeout !== null;
+
+        while (!empty($fibers)) {
+            if ($hasTimeout && (microtime(true) - $startTime) >= $timeout) {
+                // 中断所有未完成的纤程
+                foreach ($fibers as $fiber) {
+                    if ($fiber->isRunning()) {
+                        // 注意：PHP Fiber 无法强制中断运行中的纤程
+                        // 这里只是标记超时，实际中断需要任务自行检查
+                    }
+                }
+                throw new RuntimeException("Task execution timed out after {$timeout} seconds");
+            }
+
+            foreach ($fibers as $key => $fiber) {
+                if ($fiber->isTerminated()) {
+                    try {
+                        $result = $fiber->getReturn();
+                        if ($result instanceof Throwable) {
+                            $exceptions[$key] = $result;
+                        } else {
+                            $results[$key] = $result;
+                        }
+                    } catch (Throwable $e) {
+                        $exceptions[$key] = $e;
+                    }
+                    unset($fibers[$key]);
+                } elseif ($fiber->isSuspended()) {
+                    // 恢复挂起的纤程
+                    $fiber->resume();
+                }
+            }
+
+            // 避免忙等待，短暂休眠
+            if (!empty($fibers)) {
+                usleep(1000); // 1ms
+            }
+        }
+
+        // 如果有异常，抛出第一个异常
+        if (!empty($exceptions)) {
+            throw new RuntimeException('One or more tasks failed', 0, $exceptions[0]);
+        }
+
+        return $results;
     }
 
     /**
      * 带超时控制的任务执行
-     *
+     * 
      * @param callable|Runnable $task 任务
      * @param float $timeout 超时时间（秒）
-     * @param array $context 上下文数据
-     * @return mixed 任务执行结果
-     * @throws Throwable
+     * @return mixed 任务结果
+     * @throws RuntimeException
      */
-    public static function runWithTimeout(callable|Runnable $task, float $timeout, array $context = []): mixed
+    public static function runWithTimeout(callable|Runnable $task, float $timeout): mixed
     {
-        // 检查环境是否支持纤程
-        if (!Environment::checkFiberSupport()) {
-            throw new \RuntimeException('Fiber support is not available in this environment.');
-        }
+        $result = null;
+        $exception = null;
+        $completed = false;
 
-        // 创建带超时的纤程
-        $fiber = new \Fiber(function () use ($task, $context) {
-            return self::run($task, $context);
+        $fiber = new Fiber(function () use ($task, &$result, &$exception, &$completed) {
+            try {
+                if ($task instanceof Runnable) {
+                    $result = $task->run();
+                } else {
+                    $result = $task();
+                }
+            } catch (Throwable $e) {
+                $exception = $e;
+            } finally {
+                $completed = true;
+            }
         });
 
-        // 启动纤程
         $fiber->start();
 
-        // 设置超时
         $startTime = microtime(true);
-
-        while (!$fiber->isTerminated()) {
-            // 检查是否超时
-            if (microtime(true) - $startTime > $timeout) {
-                throw new \RuntimeException("Task execution timed out after {$timeout} seconds.");
+        while (!$completed && (microtime(true) - $startTime) < $timeout) {
+            if ($fiber->isSuspended()) {
+                $fiber->resume();
             }
-
-            // 暂停当前纤程，允许其他纤程运行
-            \Fiber::suspend();
+            usleep(1000); // 1ms
         }
 
-        // 获取结果
-        return $fiber->getReturn();
+        if (!$completed) {
+            throw new RuntimeException("Task execution timed out after {$timeout} seconds");
+        }
+
+        if ($exception !== null) {
+            throw new RuntimeException('Task failed', 0, $exception);
+        }
+
+        return $result;
     }
 }

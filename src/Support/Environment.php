@@ -4,83 +4,148 @@ declare(strict_types=1);
 
 namespace Nova\Fibers\Support;
 
-use RuntimeException;
-
 /**
  * 运行环境检测工具类
- *
- * @package Nova\Fibers\Support
+ * 
+ * 提供对运行环境的检测功能，包括PHP版本、禁用函数等，确保纤程功能正常运行
  */
 class Environment
 {
     /**
-     * 检查 Fiber 支持
-     *
-     * @return bool 是否支持 Fiber
+     * 检查PHP版本是否支持纤程功能
+     * 
+     * @return bool 是否支持纤程
+     */
+    public static function supportsFibers(): bool
+    {
+        return version_compare(PHP_VERSION, '8.1.0', '>=');
+    }
+    
+    /**
+     * 检查PHP版本是否支持纤程功能（兼容旧方法名）
+     * 
+     * @return bool 是否支持纤程
      */
     public static function checkFiberSupport(): bool
     {
-        return version_compare(PHP_VERSION, '8.1.0', '>=');
+        return self::supportsFibers();
+    }
+
+    /**
+     * 检查是否应该启用安全析构模式
+     * 
+     * @return bool 是否应该启用安全析构模式
+     */
+    public static function shouldEnableSafeDestructMode(): bool
+    {
+        // 如果PHP版本小于8.4.0，则应该启用安全析构模式
+        return !self::supportsFiberSuspendInDestruct();
+    }
+
+    /**
+     * 检查是否在析构函数中支持纤程挂起
+     * 
+     * @return bool 是否支持析构函数中挂起
+     */
+    public static function supportsFiberSuspendInDestruct(): bool
+    {
+        // PHP 8.4.0及以上版本支持在析构函数中挂起纤程
+        return version_compare(PHP_VERSION, '8.4.0', '>=');
+    }
+
+    /**
+     * 获取禁用的函数列表
+     * 
+     * @return array 禁用的函数列表
+     */
+    public static function getDisabledFunctions(): array
+    {
+        $disabled = ini_get('disable_functions');
+        if (empty($disabled)) {
+            return [];
+        }
+        
+        return array_map('trim', explode(',', $disabled));
+    }
+
+    /**
+     * 检查特定函数是否被禁用
+     * 
+     * @param string $function 函数名称
+     * @return bool 是否被禁用
+     */
+    public static function isFunctionDisabled(string $function): bool
+    {
+        $disabled = self::getDisabledFunctions();
+        return in_array($function, $disabled, true);
     }
 
     /**
      * 诊断运行环境
-     *
-     * @return array 问题列表
+     * 
+     * @return array 诊断结果
      */
     public static function diagnose(): array
     {
         $issues = [];
-
-        // 检查 PHP 版本
-        if (version_compare(PHP_VERSION, '8.1.0', '<')) {
+        
+        // 检查PHP版本
+        if (!self::supportsFibers()) {
             $issues[] = [
                 'type' => 'php_version',
-                'message' => 'PHP 8.1+ is required for Fiber support. Current version: ' . PHP_VERSION
+                'message' => 'PHP version must be 8.1.0 or higher to support fibers',
+                'severity' => 'error'
             ];
         }
-
-        // 检查禁用函数
-        $disabledFunctions = explode(',', ini_get('disable_functions'));
-        $disabledFunctions = array_map('trim', $disabledFunctions);
-
-        $criticalFunctions = ['pcntl_fork', 'proc_open', 'exec', 'shell_exec'];
+        
+        // 检查析构函数中纤程挂起支持
+        if (!self::supportsFiberSuspendInDestruct()) {
+            $issues[] = [
+                'type' => 'fiber_destruct',
+                'message' => 'Fiber suspension in destructors is not supported in PHP < 8.4.0',
+                'severity' => 'warning'
+            ];
+        }
+        
+        // 检查禁用的函数
+        $criticalFunctions = ['proc_open', 'exec', 'shell_exec', 'system'];
         foreach ($criticalFunctions as $function) {
-            if (in_array($function, $disabledFunctions)) {
+            if (self::isFunctionDisabled($function)) {
                 $issues[] = [
                     'type' => 'function_disabled',
-                    'message' => "$function is disabled which may affect fiber functionality"
+                    'message' => "Function '{$function}' is disabled which may affect fiber functionality",
+                    'severity' => 'warning'
                 ];
             }
         }
-
-        // 检查 Fiber 析构限制（PHP 8.4 之前）
-        if (version_compare(PHP_VERSION, '8.4.0', '<')) {
+        
+        // 检查pcntl扩展（如果需要的话）
+        if (!extension_loaded('pcntl') && self::supportsFibers()) {
             $issues[] = [
-                'type' => 'fiber_unsafe',
-                'message' => 'PHP < 8.4: Fiber::suspend() is not allowed in __destruct() methods'
+                'type' => 'extension_missing',
+                'message' => 'PCNTL extension is not loaded, some fiber features may be limited',
+                'severity' => 'notice'
             ];
         }
-
-        // 检查 set_time_limit
-        if (function_exists('set_time_limit') && in_array('set_time_limit', $disabledFunctions)) {
-            $issues[] = [
-                'type' => 'fiber_unsafe',
-                'message' => 'set_time_limit is disabled which may break fiber suspension'
-            ];
-        }
-
+        
         return $issues;
     }
 
     /**
-     * 检查是否启用安全析构模式
-     *
-     * @return bool
+     * 获取环境信息
+     * 
+     * @return array 环境信息
      */
-    public static function shouldEnableSafeDestructMode(): bool
+    public static function getInfo(): array
     {
-        // PHP 8.4 之前需要启用安全模式
-        return version_compare(PHP_VERSION, '8.4.0', '<');
+        return [
+            'php_version' => PHP_VERSION,
+            'php_version_id' => PHP_VERSION_ID,
+            'os' => PHP_OS,
+            'fiber_supported' => self::supportsFibers(),
+            'fiber_suspend_in_destruct' => self::supportsFiberSuspendInDestruct(),
+            'disabled_functions' => self::getDisabledFunctions(),
+            'extensions' => get_loaded_extensions(),
+        ];
     }
 }

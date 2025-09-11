@@ -4,222 +4,187 @@ declare(strict_types=1);
 
 namespace Nova\Fibers\Core;
 
-use Nova\Fibers\Contracts\Runnable;
-use Nova\Fibers\Support\CpuInfo;
-use Nova\Fibers\Support\Environment;
-use RuntimeException;
 use Fiber;
-use Closure;
+use RuntimeException;
+use Nova\Fibers\Contracts\Runnable;
 
 /**
- * 高性能 Fiber 池实现
- *
- * @package Nova\Fibers\Core
+ * 高性能纤程池实现
+ * 
+ * 管理一组纤程的创建、执行和回收，支持并发任务处理和资源管理
  */
 class FiberPool
 {
     /**
-     * @var Fiber[] 活跃的纤程列表
+     * 纤程池配置
+     * 
+     * @var array
+     */
+    protected array $config;
+
+    /**
+     * 纤程池中的纤程列表
+     * 
+     * @var Fiber[]
      */
     protected array $fibers = [];
 
     /**
-     * @var callable[] 待执行的任务队列
+     * 空闲纤程队列
+     * 
+     * @var Fiber[]
      */
-    protected array $queue = [];
+    protected array $idleFibers = [];
 
     /**
-     * @var int 池大小
+     * 构造函数
+     * 
+     * @param array $config 纤程池配置
      */
-    protected int $size;
-
-    /**
-     * @var int 最大执行时间（秒）
-     */
-    protected int $maxExecTime;
-
-    /**
-     * @var int GC 间隔
-     */
-    protected int $gcInterval;
-
-    /**
-     * @var int 已执行任务计数
-     */
-    protected int $execCount = 0;
-
-    /**
-     * @var callable|null 创建纤程时的回调
-     */
-    protected $onCreate;
-
-    /**
-     * @var callable|null 销毁纤程时的回调
-     */
-    protected $onDestroy;
-
-    /**
-     * @var string 池名称
-     */
-    protected string $name;
-
-    /**
-     * FiberPool 构造函数
-     *
-     * @param array $options 配置选项
-     */
-    public function __construct(array $options = [])
+    public function __construct(array $config = [])
     {
-        // 检查环境兼容性
-        if (!Environment::checkFiberSupport()) {
-            throw new RuntimeException('Fiber requires PHP 8.1 or higher. Current version: ' . PHP_VERSION);
-        }
-
-        $this->size = $options['size'] ?? (CpuInfo::get() * 4);
-        $this->maxExecTime = $options['max_exec_time'] ?? 30;
-        $this->gcInterval = $options['gc_interval'] ?? 100;
-        $this->onCreate = $options['onCreate'] ?? null;
-        $this->onDestroy = $options['onDestroy'] ?? null;
-        $this->name = $options['name'] ?? 'default';
+        $this->config = array_merge([
+            'size' => 64,
+            'max_exec_time' => 30,
+            'gc_interval' => 100,
+            'context' => [],
+        ], $config);
     }
 
     /**
-     * 并行执行多个任务
-     *
+     * 并发执行多个任务
+     * 
      * @param callable[] $tasks 任务数组
      * @param float|null $timeout 超时时间（秒）
-     * @return array 结果数组
-     * @throws RuntimeException 如果超时
+     * @return array 任务执行结果
+     * @throws RuntimeException 如果任务执行超时
      */
     public function concurrent(array $tasks, ?float $timeout = null): array
     {
         $results = [];
         $fibers = [];
-        $terminated = [];
+        $startTime = microtime(true);
 
-        // 如果设置了超时，记录开始时间
-        $startTime = $timeout !== null ? microtime(true) : null;
-
-        // 创建纤程
+        // 创建纤程并启动任务
         foreach ($tasks as $key => $task) {
             $fiber = new Fiber($task);
-            $fibers[$key] = $fiber;
             $fiber->start();
-            $terminated[$key] = false;
+            $fibers[$key] = $fiber;
         }
 
-        // 等待所有纤程完成
-        while (count(array_filter($terminated)) < count($fibers)) {
+        // 等待所有任务完成
+        while (!empty($fibers)) {
             // 检查是否超时
-            if ($timeout !== null && $startTime !== null && (microtime(true) - $startTime) > $timeout) {
-                // 清理所有纤程
-                foreach ($fibers as $fiber) {
-                    // 注意：PHP Fiber 无法强制终止运行中的纤程，我们只能抛出异常
-                }
+            if ($timeout !== null && (microtime(true) - $startTime) >= $timeout) {
                 throw new RuntimeException("Task execution timed out after {$timeout} seconds");
             }
-
+            
             foreach ($fibers as $key => $fiber) {
-                if (!$terminated[$key]) {
-                    if ($fiber->isTerminated()) {
-                        $terminated[$key] = true;
-                        try {
-                            $results[$key] = $fiber->getReturn();
-                        } catch (\Throwable $e) {
-                            $results[$key] = $e;
-                        }
-                    } else {
-                        // 给其他纤程一些执行时间
-                        Fiber::suspend();
-                    }
+                if ($fiber->isTerminated()) {
+                    $results[$key] = $fiber->getReturn();
+                    unset($fibers[$key]);
+                } elseif ($fiber->isSuspended()) {
+                    $fiber->resume();
                 }
             }
+            
+            // 避免CPU占用过高
+            usleep(1000);
         }
 
         return $results;
     }
 
     /**
-     * 提交任务到池中执行
-     *
-     * @param callable $task 任务
-     * @return mixed 任务结果
+     * 提交一个任务到纤程池执行
+     * 
+     * @param Runnable $task 可执行任务
+     * @return mixed 任务执行结果
      */
-    public function submit(callable $task)
+    public function submit(Runnable $task)
     {
-        $fiber = new Fiber($task);
-        $this->fibers[] = $fiber;
-
-        if ($this->onCreate) {
-            ($this->onCreate)(count($this->fibers) - 1);
+        // 如果有空闲纤程，复用它
+        if (!empty($this->idleFibers)) {
+            $fiber = array_pop($this->idleFibers);
+        } else {
+            // 创建新纤程
+            $fiber = new Fiber(function () use ($task) {
+                while (true) {
+                    $task->run();
+                    // 将纤程标记为空闲
+                    $this->idleFibers[] = Fiber::getCurrent();
+                    // 挂起纤程等待新任务
+                    Fiber::suspend();
+                }
+            });
+            $this->fibers[] = $fiber;
         }
 
-        $fiber->start();
-
-        try {
-            $result = $fiber->getReturn();
-            $this->cleanupFiber($fiber);
-            return $result;
-        } catch (\Throwable $e) {
-            $this->cleanupFiber($fiber);
-            throw $e;
+        // 启动或恢复纤程执行任务
+        if (!$fiber->isStarted()) {
+            $fiber->start();
+        } else {
+            $fiber->resume($task);
         }
-    }
 
-    /**
-     * 清理完成的纤程
-     *
-     * @param Fiber $fiber
-     * @return void
-     */
-    protected function cleanupFiber(Fiber $fiber): void
-    {
-        $index = array_search($fiber, $this->fibers, true);
-        if ($index !== false) {
-            if ($this->onDestroy) {
-                ($this->onDestroy)($index);
+        // 等待任务完成并返回结果
+        while (!$fiber->isTerminated()) {
+            if ($fiber->isSuspended()) {
+                break;
             }
-            unset($this->fibers[$index]);
-            $this->fibers = array_values($this->fibers); // 重新索引
+            usleep(1000);
         }
 
-        // 执行垃圾回收
-        $this->execCount++;
-        if ($this->execCount % $this->gcInterval === 0) {
-            $this->gc();
-        }
+        return $task->getResult();
     }
 
     /**
-     * 垃圾回收
-     *
-     * @return void
-     */
-    protected function gc(): void
-    {
-        // 清理已完成的纤程
-        $this->fibers = array_filter($this->fibers, function ($fiber) {
-            return $fiber->isTerminated() === false;
-        });
-    }
-
-    /**
-     * 获取池大小
-     *
-     * @return int
+     * 获取纤程池大小
+     * 
+     * @return int 纤程池大小
      */
     public function getSize(): int
     {
-        return $this->size;
+        return $this->config['size'];
     }
 
     /**
-     * 获取活跃纤程数量
-     *
-     * @return int
+     * 获取当前活跃纤程数
+     * 
+     * @return int 活跃纤程数
      */
     public function getActiveCount(): int
     {
-        return count($this->fibers);
+        return count($this->fibers) - count($this->idleFibers);
+    }
+
+    /**
+     * 获取空闲纤程数
+     * 
+     * @return int 空闲纤程数
+     */
+    public function getIdleCount(): int
+    {
+        return count($this->idleFibers);
+    }
+
+    /**
+     * 清理已终止的纤程
+     * 
+     * @return void
+     */
+    public function cleanup(): void
+    {
+        foreach ($this->fibers as $key => $fiber) {
+            if ($fiber->isTerminated()) {
+                unset($this->fibers[$key]);
+            }
+        }
+        
+        foreach ($this->idleFibers as $key => $fiber) {
+            if ($fiber->isTerminated()) {
+                unset($this->idleFibers[$key]);
+            }
+        }
     }
 }

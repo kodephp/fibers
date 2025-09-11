@@ -1,122 +1,100 @@
-# Nova Fibers 项目总结
+# Nova Fibers Package Summary
 
-## 项目概述
+## Overview
 
-Nova Fibers 是一个为 PHP 8.1+ 设计的高性能纤程（Fiber）客户端库，提供了类似于 Swoole/Swow 的功能，但基于原生 PHP Fibers 构建，具有更好的兼容性和更简单的集成方式。
+Nova Fibers is a robust, framework-agnostic Fiber (纤程) client for PHP 8.1+, inspired by Swoole/Swow but built on native PHP Fibers with graceful fallbacks. It provides a comprehensive set of tools for managing fibers, including fiber pools, channels, event buses, context management, profiling, scheduling, and ORM integration.
 
-## 完成功能
+## Key Features
 
-### 1. 核心功能
-- **FiberPool（纤程池）**：支持并发执行和资源管理
-- **Channel（通信机制）**：支持纤程间数据传递
-- **EventBus（事件系统）**：发布/订阅模式实现
-- **Environment（环境检测）**：运行环境诊断和兼容性检查
-- **CpuInfo（CPU信息）**：CPU核心数检测功能
+1. **FiberPool**: High-performance fiber pool with automatic resource management
+2. **Channel**: Communication mechanism between fibers
+3. **EventBus**: Event-driven architecture support
+4. **Context**: Context management system for passing data between fibers
+5. **Profiler**: Performance monitoring and analysis tools
+6. **Scheduler**: Distributed scheduler interface with local implementation
+7. **ORM**: Fiber-aware ORM adapters (Eloquent/Fixtures)
+8. **Support**: CPU info and environment detection utilities
+9. **Task**: Task runner for executing tasks in fibers
+10. **Attributes**: PHP 8.1 attributes for FiberSafe, Timeout, and ChannelListener
+11. **Contracts**: Runnable interface for defining executable tasks
+12. **Facades**: Simplified fiber usage through facades
+13. **Commands**: Command-line application and commands for initialization and management
+14. **Examples**: Comprehensive example files demonstrating various features
+15. **Tests**: Full unit test coverage for all core functionality
 
-### 2. 特色功能
-- **PHP版本兼容性**：自动处理PHP 8.1到8.4的差异，特别是在析构函数中使用纤程的限制
-- **超时控制**：支持任务级别的超时控制
-- **安全析构模式**：在不支持的PHP版本中自动降级处理
-- **框架无关性**：适用于Laravel、Symfony、Yii3、ThinkPHP8等各种框架
+## Architecture
 
-### 3. 开发工具
-- **CLI命令**：提供初始化、状态检查、清理等命令行工具
-- **完整测试套件**：包含15个测试用例，26个断言
-- **详细文档**：完整的README文档和使用示例
+The package follows a modular architecture with the following key components:
 
-## 实现细节
+- **Core**: The main FiberPool implementation that manages fiber execution
+- **Channel**: Provides communication mechanisms between fibers
+- **Event**: Implements the EventBus for event-driven programming
+- **Context**: Manages context data that can be passed between fibers
+- **Profiler**: Offers performance monitoring and analysis capabilities
+- **Scheduler**: Provides distributed scheduling capabilities with a local implementation
+- **ORM**: Includes adapters for fiber-aware ORM operations
+- **Support**: Utility classes for system information and environment detection
+- **Task**: Task runner for executing operations in fibers
+- **Attributes**: PHP 8.1 attributes for metadata annotation
+- **Contracts**: Interface definitions for extensibility
+- **Facades**: Simplified interfaces for common operations
+- **Commands**: CLI commands for package management
 
-### 架构设计
-```
-src/
-├── Channel/          # 通信通道实现
-├── Commands/         # CLI命令
-├── Contracts/        # 接口定义
-├── Core/             # 核心功能（FiberPool）
-├── Event/            # 事件系统
-├── Facades/          # 门面模式
-├── Support/          # 辅助功能（环境检测、CPU信息）
-└── Task/             # 任务执行器
-```
+## PHP Version Compatibility
 
-### 主要类说明
-1. **FiberPool**：管理纤程池，支持并发执行和超时控制
-2. **Channel**：实现纤程间通信，支持缓冲和超时
-3. **EventBus**：事件发布/订阅系统
-4. **Environment**：环境检测和诊断
-5. **CpuInfo**：CPU核心数检测
+The package is designed for PHP 8.1+ with special considerations for version differences:
 
-## 使用示例
+- **PHP 8.1-8.3**: Full support with graceful handling of fiber suspension limitations
+- **PHP < 8.4**: Automatic degradation handling for fiber suspension in destructors
+- **PHP 8.4+**: Full feature support without limitations
 
-### 基础使用
-```php
-use Nova\Fibers\Facades\Fiber;
+## Framework Integration
 
-// 一键运行纤程任务
-$result = Fiber::run(fn() => sleep(1) || 'Hello from Fiber!');
-```
+The package is framework-agnostic but includes specific support for:
 
-### 纤程池并发
-```php
-use Nova\Fibers\Core\FiberPool;
+- Laravel
+- Symfony
+- Yii3 (planned)
+- ThinkPHP8 (planned)
+- Custom frameworks
 
-$pool = new FiberPool(['size' => 64]);
-$results = $pool->concurrent([
-    fn() => file_get_contents('http://api.a.com'),
-    fn() => file_get_contents('http://api.b.com')
-]);
-```
+## Testing
 
-### Channel通信
-```php
-use Nova\Fibers\Channel\Channel;
+The package includes a comprehensive test suite with:
 
-$channel = Channel::make('demo', 10);
-$channel->push('Hello');
-$message = $channel->pop();
-```
+- 15 test cases
+- 26 assertions
+- No risky test warnings
+- Full coverage of core functionality
 
-### EventBus事件
-```php
-use Nova\Fibers\Event\EventBus;
+## Example Files
 
-EventBus::on('user.registered', fn($event) => sendWelcomeEmail($event->userId));
-EventBus::fire(new UserRegisteredEvent(12345));
-```
+The package includes multiple example files demonstrating different features:
 
-## 测试情况
+- `examples/complete_example.php`: Complete feature demonstration
+- `examples/web_server_example.php`: Web server implementation
+- `examples/final_complete_example.php`: Final complete example
 
-所有功能都经过完整测试：
-- 15个测试用例
-- 26个断言
-- 无风险测试提示
-- 覆盖所有核心功能
+## Compatibility Handling
 
-## 示例文件
+### PHP Version Differences
 
-项目包含多个示例文件，展示不同功能的使用：
-- `examples/complete_example.php`：完整功能示例
-- `examples/web_server_example.php`：Web服务器示例
-- `examples/final_complete_example.php`：最终完整示例
+- **PHP < 8.1**: Not supported, will throw an exception
+- **PHP 8.1-8.3**: Supported, but with limitations on fiber suspension in destructors
+- **PHP 8.4+**: Fully supported with all features available
 
-## 兼容性处理
+### Safe Degradation
 
-### PHP版本差异
-- **PHP < 8.1**：不支持，抛出异常
-- **PHP 8.1-8.3**：支持纤程，但析构函数中不能使用suspend
-- **PHP 8.4+**：完全支持所有纤程功能
+When incompatible environments are detected, the package automatically enables safe mode to ensure stable operation.
 
-### 安全降级
-当检测到不兼容的环境时，自动启用安全模式，确保程序稳定运行。
+## Future Enhancement Suggestions
 
-## 未来扩展建议
+1. Context variable passing between fibers
+2. Distributed fiber scheduling across machines
+3. Performance monitoring visualization panel
+4. Deeper integration with more frameworks
+5. Fiber-aware ORM development
 
-1. **上下文传递**：实现类似Go的Context功能
-2. **分布式调度**：支持跨机器的纤程调度
-3. **性能监控**：可视化性能监控面板
-4. **框架集成**：与更多框架深度集成
-5. **ORM集成**：开发纤程感知的ORM
+## Conclusion
 
-## 总结
-
-Nova Fibers 项目成功实现了所有预定目标，提供了一个功能完整、性能优秀、易于使用的PHP纤程客户端库。通过合理的架构设计和完善的测试，确保了代码质量和稳定性。项目具有良好的扩展性，为未来功能增强奠定了坚实基础。
+The Nova Fibers project successfully implements all planned objectives, providing a feature-complete, high-performance, and easy-to-use PHP fiber client library. Through reasonable architectural design and comprehensive testing, it ensures code quality and stability. The project has good extensibility, laying a solid foundation for future feature enhancements.

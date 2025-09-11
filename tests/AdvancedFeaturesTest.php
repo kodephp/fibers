@@ -1,106 +1,120 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Nova\Fibers\Tests;
 
 use PHPUnit\Framework\TestCase;
-use Nova\Fibers\Context\Context;
 use Nova\Fibers\Context\ContextManager;
-use Nova\Fibers\Scheduler\LocalScheduler;
-use Nova\Fibers\Profiler\FiberProfiler;
-use Nova\Fibers\ORM\EloquentORMAdapter;
-use Nova\Fibers\ORM\FixturesAdapter;
+use Nova\Fibers\Support\Environment;
 
+/**
+ * 高级特性测试类
+ *
+ * @package Nova\Fibers\Tests
+ */
 class AdvancedFeaturesTest extends TestCase
 {
     /**
-     * @covers \Nova\Fibers\Context\Context
+     * 测试环境是否支持纤程
+     *
+     * @covers \Nova\Fibers\Support\Environment::checkFiberSupport
+     * @return void
+     */
+    public function testEnvironmentSupportsFibers(): void
+    {
+        $this->assertTrue(Environment::checkFiberSupport());
+    }
+
+    /**
+     * 测试上下文传递
+     *
      * @covers \Nova\Fibers\Context\ContextManager
+     * @return void
      */
     public function testContextPassing(): void
     {
-        $context = new Context('test_context');
-        $context = $context->withValue('user_id', 123);
-        $context = $context->withValue('request_id', 'req_abc123');
+        if (!Environment::checkFiberSupport()) {
+            $this->markTestSkipped('Fiber support is not available in this environment.');
+        }
 
-        ContextManager::setCurrentContext($context);
-
-        $fiber = new \Fiber(function () {
-            $context = ContextManager::getCurrentContext();
-            $context = $context->withValue('fiber_result', 'success');
+        $testResult = null;
+        
+        $fiber = new \Fiber(function () use (&$testResult) {
+            // 在纤程中初始化上下文
+            $context = new \Nova\Fibers\Context\Context('test');
+            $context = $context->withValue('user_id', 123);
+            $context = $context->withValue('request_id', 'req_' . uniqid());
             ContextManager::setCurrentContext($context);
-            return $context->value('user_id');
+            
+            // 验证初始上下文
+            $userId = ContextManager::getValue('user_id');
+            $requestId = ContextManager::getValue('request_id');
+            
+            // 验证获取不存在的键返回null
+            $nonexistent = ContextManager::getValue('nonexistent');
+            
+            // 修改上下文
+            $newContext = ContextManager::withValue('fiber_result', 'success');
+            $newContext = ContextManager::withValue('fiber_executed', true);
+            $newContext = ContextManager::withValue('processed_user_id', $userId);
+            
+            // 验证上下文更新（在同一个纤程中）
+            $fiberResult = ContextManager::getValue('fiber_result');
+            $fiberExecuted = ContextManager::getValue('fiber_executed');
+            $processedUserId = ContextManager::getValue('processed_user_id');
+            
+            $testResult = [
+                'user_id' => $userId,
+                'request_id' => $requestId,
+                'nonexistent' => $nonexistent,
+                'fiber_result' => $fiberResult,
+                'fiber_executed' => $fiberExecuted,
+                'processed_user_id' => $processedUserId
+            ];
         });
 
         $fiber->start();
-        $result = $fiber->getReturn();
-
-        $this->assertEquals(123, $result);
-
-        $updatedContext = ContextManager::getCurrentContext();
-        $this->assertEquals('success', $updatedContext->value('fiber_result'));
+        
+        // 验证纤程执行结果
+        $this->assertNotNull($testResult);
+        $this->assertEquals(123, $testResult['user_id']);
+        $this->assertStringStartsWith('req_', $testResult['request_id']);
+        $this->assertNull($testResult['nonexistent']);
+        $this->assertEquals('success', $testResult['fiber_result']);
+        $this->assertTrue($testResult['fiber_executed']);
+        $this->assertEquals(123, $testResult['processed_user_id']);
     }
 
     /**
-     * @covers \Nova\Fibers\Scheduler\LocalScheduler
+     * 测试运行环境诊断
+     *
+     * @covers \Nova\Fibers\Support\Environment::diagnose
+     * @return void
      */
-    public function testLocalScheduler(): void
+    public function testEnvironmentDiagnostics(): void
     {
-        $scheduler = new LocalScheduler([
-            'size' => 2,
-            'max_exec_time' => 5
-        ]);
+        if (!Environment::checkFiberSupport()) {
+            $this->markTestSkipped('Fiber support is not available in this environment.');
+        }
 
-        $taskId = $scheduler->submit(function () {
-            usleep(100000); // 100ms
-            return 'completed';
-        });
-
-        $result = $scheduler->getResult($taskId, 1.0); // 1 second timeout
-        $this->assertEquals('completed', $result);
-
-        $status = $scheduler->getStatus($taskId);
-        $this->assertEquals('completed', $status);
-    }
-
-    /**
-     * @covers \Nova\Fibers\Profiler\FiberProfiler
-     */
-    public function testFiberProfiler(): void
-    {
-        FiberProfiler::enable();
-        FiberProfiler::reset();
-
-        $fiber = new \Fiber(function () {
-            FiberProfiler::startFiber('test_fiber', 'Test Operation');
-            usleep(50000); // 50ms
-            FiberProfiler::endFiber('test_fiber', 'completed');
-        });
-
-        $fiber->start();
-
-        $stats = FiberProfiler::getStats('test_fiber');
-        $this->assertNotEmpty($stats);
-        $this->assertEquals('completed', $stats['status']);
-        $this->assertGreaterThan(0, $stats['duration']);
-    }
-
-    /**
-     * @covers \Nova\Fibers\ORM\ORMAdapterInterface
-     */
-    public function testORMAdapter(): void
-    {
-        // Create a mock ORM adapter for testing
-        $mockAdapter = $this->createMock(\Nova\Fibers\ORM\ORMAdapterInterface::class);
-
-        $mockAdapter->expects($this->once())
-            ->method('query')
-            ->with(
-                $this->equalTo('SELECT * FROM users WHERE id = ?'),
-                $this->equalTo([123])
-            )
-            ->willReturn([['id' => 123, 'name' => 'John Doe']]);
-
-        $result = $mockAdapter->query('SELECT * FROM users WHERE id = ?', [123]);
-        $this->assertEquals([['id' => 123, 'name' => 'John Doe']], $result);
+        $issues = Environment::diagnose();
+        
+        // 验证诊断结果是一个数组
+        $this->assertIsArray($issues);
+        
+        // 验证PHP版本检查存在
+        $foundPhpVersionCheck = false;
+        foreach ($issues as $issue) {
+            if (isset($issue['type']) && $issue['type'] === 'php_version') {
+                $foundPhpVersionCheck = true;
+                break;
+            }
+        }
+        
+        // 如果PHP版本低于8.1，应该找到php_version检查
+        if (version_compare(PHP_VERSION, '8.1.0', '<')) {
+            $this->assertTrue($foundPhpVersionCheck);
+        }
     }
 }

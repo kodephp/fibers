@@ -1,23 +1,71 @@
 #!/usr/bin/env php
 <?php
 
-declare(strict_types=1);
+/**
+ * Nova Fibers CLI Entry Point
+ * 
+ * This script serves as the main entry point for the Nova Fibers command-line interface.
+ * It handles command routing and execution.
+ */
 
-// 检查是否安装了 Composer autoloader
-if (file_exists(__DIR__ . '/../vendor/autoload.php')) {
-    require __DIR__ . '/../vendor/autoload.php';
-} elseif (file_exists(__DIR__ . '/../../../autoload.php')) {
-    require __DIR__ . '/../../../autoload.php';
-} else {
-    echo "Error: Composer autoloader not found. Please run 'composer install'.\n";
+// Check if we're running in CLI mode
+if (PHP_SAPI !== 'cli') {
+    echo "This tool can only be run from the command line.\n";
     exit(1);
 }
 
-use Nova\Fibers\Commands\Application;
+// Define the base directory
+define('FIBERS_BASE_DIR', dirname(__DIR__));
 
-// 创建并运行 CLI 应用
-$app = new Application();
-$app->setName('Nova Fibers')
-    ->setVersion('1.0.0');
+// Check PHP version
+if (version_compare(PHP_VERSION, '8.1.0', '<')) {
+    echo "Nova Fibers requires PHP 8.1 or higher. You are using PHP " . PHP_VERSION . ".\n";
+    exit(1);
+}
 
-exit($app->run());
+// Load Composer's autoloader
+$autoloadPaths = [
+    FIBERS_BASE_DIR . '/vendor/autoload.php',           // Standard Composer location
+    FIBERS_BASE_DIR . '/../../autoload.php',            // When installed as dependency
+    FIBERS_BASE_DIR . '/../../../autoload.php',         // When installed in deeper nested dependencies
+];
+
+$autoloadFound = false;
+foreach ($autoloadPaths as $path) {
+    if (file_exists($path)) {
+        require_once $path;
+        $autoloadFound = true;
+        break;
+    }
+}
+
+if (!$autoloadFound) {
+    echo "Composer autoloader not found. Please run 'composer install' to install dependencies.\n";
+    exit(1);
+}
+
+try {
+    // Create the application
+    $app = new Nova\Fibers\Commands\Application('Nova Fibers', '1.0.0');
+    
+    // Register built-in commands
+    $app->add(new Nova\Fibers\Commands\InitCommand());
+    $app->add(new Nova\Fibers\Commands\StatusCommand());
+    $app->add(new Nova\Fibers\Commands\RunExampleCommand());
+    $app->add(new Nova\Fibers\Commands\ListCommand());
+    $app->add(new Nova\Fibers\Commands\HelpCommand());
+    $app->add(new Nova\Fibers\Commands\InitORMCommand());
+    $app->add(new Nova\Fibers\Commands\InitSchedulerCommand());
+    $app->add(new Nova\Fibers\Commands\StartProfilerCommand());
+    
+    // Run the application
+    exit($app->run());
+} catch (Exception $e) {
+    echo "Error: " . $e->getMessage() . "\n";
+    echo "File: " . $e->getFile() . " (Line: " . $e->getLine() . ")\n";
+    exit(1);
+} catch (Throwable $e) {
+    echo "Fatal Error: " . $e->getMessage() . "\n";
+    echo "File: " . $e->getFile() . " (Line: " . $e->getLine() . ")\n";
+    exit(1);
+}

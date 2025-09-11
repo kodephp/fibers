@@ -1,3 +1,17 @@
+写一个字节团队的trae IDE识别的md文档以便模型生成：
+要开发一个 健壮全面的 Fiber 纤程客户端 的composer的包，命名 nova/fibers，需要封装开发时全面并便捷方法使用，命令方法尽量简洁好记，请帮忙补充完善，更健壮的架构代码实现：
+1、php8.1+使用，php8.1 和 php8.4的区别：注意: 在 PHP 8.4.0 之前，不允许在对象析构方法执行期间切换纤程。判断php版本是否支持，不支持则自动降级处理。
+2、纤程池，一键纤程，其他类/方法可方便加入纤程，暂停，查看id，纤程间通信，队列，redis，MySQL，pgsql，HTTP，超时控制等操作（参考swow/swoole等协程框架使用）。如线程池设置为 CPU 核心数的 2-4 倍，增加获取CPU数量方法可在配置文件中使用。请帮忙补充完善。
+3、需要开发所有框架通用的包，主要偏向laravel、symfony等框架，但是也要适配yii3、thinkphp8或自建框架等。生成框架推送配置文件的方法，便于对应框架使用命令直接生成配置文件。如没有则使用自带的命令生成相关配置文件。
+4、是否使用php8原生注解特性，IDE可识别的方式？
+5、README.md的详细使用方法。如线程池：什么情况下使用，如何使用；一键协程：是否尽量在不改变在运行的生产环境中的使用，如何使用等等，帮忙补充完成。
+6、如有禁用函数使用，增加检测环境方法，并在md文档中说明。
+
+
+以下是为 **`nova/fibers`** Composer 包设计的完整 `README.md` 文档，专为字节团队开发健壮、全面、IDE 可识别的 **Fiber 纤程客户端库** 而编写。该文档遵循现代 PHP 8.1+ 最佳实践，兼容 Laravel、Symfony、Yii3、ThinkPHP8 及自建框架，并支持 IDE 智能提示（通过 PHPDoc + 原生注解），包含自动配置生成、版本兼容性处理、池化管理、通信机制等核心功能。如使用 协变/逆变、反射等，可实现更安全、健壮性高、速度快 则直接使用。帮忙完善相关功能。
+
+---
+
 # 🚀 `nova/fibers` – 高性能 Fiber 线程池与协程调度器
 
 > A robust, framework-agnostic Fiber (纤程) client for PHP 8.1+, inspired by Swoole/Swow but built on native PHP Fibers with graceful fallbacks.
@@ -48,7 +62,7 @@ composer require nova/fibers
 
 ## 🧱 架构设计原则
 
-本包采用 **"轻量内核 + 插件扩展"** 设计：
+本包采用 **“轻量内核 + 插件扩展”** 设计：
 
 ```php
 Nova\Fibers\Core\FiberPool       // 主纤程池

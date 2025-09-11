@@ -27,7 +27,7 @@ class ChannelTest extends TestCase
             $this->markTestSkipped('Fiber support is not available in this environment.');
         }
 
-        $channel = new Channel(10);
+        $channel = new Channel('test', 10);
 
         $this->assertInstanceOf(Channel::class, $channel);
     }
@@ -45,15 +45,23 @@ class ChannelTest extends TestCase
             $this->markTestSkipped('Fiber support is not available in this environment.');
         }
 
-        $channel = new Channel(2);
+        $result = [];
+        
+        $fiber = new \Fiber(function () use (&$result) {
+            $channel = new Channel('test', 2);
 
-        // 推送数据
-        $channel->push('message1');
-        $channel->push('message2');
+            // 推送数据
+            $channel->push('message1');
+            $channel->push('message2');
 
-        // 弹出数据
-        $this->assertEquals('message1', $channel->pop());
-        $this->assertEquals('message2', $channel->pop());
+            // 弹出数据
+            $result[] = $channel->pop();
+            $result[] = $channel->pop();
+        });
+
+        $fiber->start();
+        
+        $this->assertEquals(['message1', 'message2'], $result);
     }
 
     /**
@@ -69,13 +77,24 @@ class ChannelTest extends TestCase
             $this->markTestSkipped('Fiber support is not available in this environment.');
         }
 
-        $channel = new Channel(1);
-        $channel->push('message');
-        $channel->close();
+        $result = [];
+        
+        $fiber = new \Fiber(function () use (&$result) {
+            $channel = new Channel('test', 1);
+            $channel->push('message');
+            $channel->close();
 
-        $this->assertTrue($channel->isClosed());
-        $this->assertEquals('message', $channel->pop());
-        $this->assertNull($channel->pop());
+            $result['closed'] = $channel->isClosed();
+            $result['message'] = $channel->pop();
+            // 通道关闭后，再次pop应该返回false而不是null
+            $result['false'] = $channel->pop();
+        });
+
+        $fiber->start();
+        
+        $this->assertTrue($result['closed']);
+        $this->assertEquals('message', $result['message']);
+        $this->assertFalse($result['false']);  // 修复：通道关闭后pop应该返回false
     }
 
     /**

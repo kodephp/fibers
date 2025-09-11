@@ -4,205 +4,166 @@ declare(strict_types=1);
 
 namespace Nova\Fibers\Commands;
 
+use Nova\Fibers\Commands\Command;
+use Nova\Fibers\Commands\Input;
+use Nova\Fibers\Commands\Output;
+
 /**
- * CLI 应用程序
- *
- * @package Nova\Fibers\Commands
+ * 命令行应用类
+ * 
+ * 管理和执行命令
  */
 class Application
 {
     /**
-     * 已注册的命令
-     *
+     * 命令数组
+     * 
      * @var Command[]
      */
-    protected array $commands = [];
+    private array $commands = [];
 
     /**
      * 应用名称
-     *
+     * 
      * @var string
      */
-    protected string $name = 'Nova Fibers CLI';
+    private string $name;
 
     /**
      * 应用版本
-     *
+     * 
      * @var string
      */
-    protected string $version = '1.0.0';
+    private string $version;
 
     /**
-     * Application 构造函数
-     */
-    public function __construct()
-    {
-        $this->registerDefaultCommands();
-    }
-
-    /**
-     * 设置应用名称
-     *
+     * 构造函数
+     * 
      * @param string $name 应用名称
-     * @return self
+     * @param string $version 应用版本
      */
-    public function setName(string $name): self
+    public function __construct(string $name = 'UNKNOWN', string $version = 'UNKNOWN')
     {
         $this->name = $name;
-        return $this;
-    }
-
-    /**
-     * 设置应用版本
-     *
-     * @param string $version 应用版本
-     * @return self
-     */
-    public function setVersion(string $version): self
-    {
         $this->version = $version;
-        return $this;
     }
 
     /**
-     * 注册命令
-     *
-     * @param Command|object $command 命令实例
-     * @return self
-     */
-    public function add($command): self
-    {
-        // 检查是否是Symfony命令
-        if (is_object($command) && get_class($command) !== 'Nova\Fibers\Commands\Command' && 
-            is_subclass_of($command, 'Symfony\Component\Console\Command\Command')) {
-            // 为Symfony命令创建适配器
-            $adaptedCommand = new class($command) extends Command {
-                private $symfonyCommand;
-                
-                public function __construct($symfonyCommand) {
-                    $this->symfonyCommand = $symfonyCommand;
-                    
-                    // 获取命令名称和描述
-                    $reflection = new \ReflectionClass($symfonyCommand);
-                    
-                    // 获取静态属性
-                    $defaultName = $reflection->getStaticPropertyValue('defaultName', null);
-                    $defaultDescription = $reflection->getStaticPropertyValue('defaultDescription', null);
-                    
-                    // 如果静态属性不存在，尝试调用方法
-                    if ($defaultName === null) {
-                        $defaultName = $symfonyCommand->getName();
-                    }
-                    
-                    if ($defaultDescription === null) {
-                        $defaultDescription = $symfonyCommand->getDescription();
-                    }
-                    
-                    $this->name = $defaultName ?? 'unnamed-command';
-                    $this->description = $defaultDescription ?? 'No description';
-                }
-                
-                public function handle(array $input = []): int {
-                    // 创建Symfony应用来运行命令
-                    $application = new \Symfony\Component\Console\Application();
-                    $application->add($this->symfonyCommand);
-                    
-                    // 创建输入对象
-                    $inputArray = array_merge([$_SERVER['argv'][0] ?? 'fibers', $this->name], $input);
-                    $symfonyInput = new \Symfony\Component\Console\Input\ArgvInput($inputArray);
-                    
-                    // 创建输出对象
-                    $symfonyOutput = new \Symfony\Component\Console\Output\ConsoleOutput();
-                    
-                    // 运行命令
-                    return $application->run($symfonyInput, $symfonyOutput);
-                }
-            };
-            
-            $this->commands[$adaptedCommand->getName()] = $adaptedCommand;
-        } else {
-            $this->commands[$command->getName()] = $command;
-        }
-        
-        return $this;
-    }
-
-    /**
-     * 注册默认命令
-     *
+     * 添加命令
+     * 
+     * @param Command $command 命令实例
      * @return void
      */
-    protected function registerDefaultCommands(): void
+    public function add(Command $command): void
     {
-        $this->add(new InitCommand());
-        $this->add(new StatusCommand());
-        $this->add(new RunExampleCommand());
-        // 可以在这里注册更多默认命令
+        $this->commands[$command->getName()] = $command;
+    }
+
+    /**
+     * 获取命令
+     * 
+     * @param string $name 命令名称
+     * @return Command|null 命令实例
+     */
+    public function get(string $name): ?Command
+    {
+        return $this->commands[$name] ?? null;
+    }
+
+    /**
+     * 获取所有命令
+     * 
+     * @return Command[] 命令数组
+     */
+    public function all(): array
+    {
+        return $this->commands;
     }
 
     /**
      * 运行应用
-     *
-     * @param array|null $argv 命令行参数
-     * @return int 退出码
+     * 
+     * @param Input|null $input 输入实例
+     * @param Output|null $output 输出实例
+     * @return int 命令执行结果
      */
-    public function run(?array $argv = null): int
+    public function run(Input $input = null, Output $output = null): int
     {
-        if ($argv === null) {
-            global $argv;
+        if ($input === null) {
+            $input = new Input();
         }
-
-        // 显示应用信息
-        echo "{$this->name} version {$this->version}\n\n";
-
-        // 检查是否有命令参数
-        if (count($argv) < 2) {
-            $this->showHelp();
-            return 1;
+        
+        if ($output === null) {
+            $output = new Output();
         }
-
-        $commandName = $argv[1];
-
-        // 检查是否是帮助命令
-        if ($commandName === '--help' || $commandName === '-h') {
-            $this->showHelp();
+        
+        // 获取命令名称
+        $rawArguments = $input->getRawArguments();
+        $commandName = $rawArguments[0] ?? 'list';
+        
+        // 处理帮助选项
+        if ($input->hasOption('help') || $input->hasOption('h')) {
+            $this->displayHelp($output);
             return 0;
         }
-
-        // 查找命令
+        
+        // 处理版本选项
+        if ($input->hasOption('version') || $input->hasOption('V')) {
+            $output->writeln("{$this->name} version {$this->version}", 'info');
+            return 0;
+        }
+        
+        // 显示命令列表
+        if ($commandName === 'list' || $commandName === 'help') {
+            $this->listCommands($output);
+            return 0;
+        }
+        
+        // 查找并执行命令
         if (!isset($this->commands[$commandName])) {
-            echo "Command '{$commandName}' not found.\n\n";
-            $this->showHelp();
+            $output->writeln("Command '{$commandName}' is not defined.", 'error');
             return 1;
         }
-
+        
         $command = $this->commands[$commandName];
-
-        // 检查是否需要显示命令帮助
-        if (isset($argv[2]) && ($argv[2] === '--help' || $argv[2] === '-h')) {
-            $command->showHelp();
-            return 0;
-        }
-
+        $command->setOutput($output);
+        
+        // 配置命令
+        $command->configure();
+        
         // 执行命令
-        $input = array_slice($argv, 2);
-        return $command->handle($input);
+        return $command->execute($input, $output);
     }
 
     /**
      * 显示帮助信息
-     *
+     * 
+     * @param Output $output 输出实例
      * @return void
      */
-    protected function showHelp(): void
+    private function displayHelp(Output $output): void
     {
-        echo "Usage: php fibers [command] [options]\n\n";
-        echo "Available commands:\n";
+        $output->writeln("Usage: command [options] [arguments]", 'info');
+        $output->writeln("");
+        $output->writeln("Options:", 'info');
+        $output->writeln("  -h, --help            Display this help message");
+        $output->writeln("  -V, --version         Display this application version");
+        $output->writeln("");
+        $output->writeln("Available commands:", 'info');
+        $this->listCommands($output);
+    }
 
+    /**
+     * 列出所有命令
+     * 
+     * @param Output $output 输出实例
+     * @return void
+     */
+    private function listCommands(Output $output): void
+    {
+        $output->writeln("Available commands:", 'info');
         foreach ($this->commands as $command) {
-            printf("  %-15s %s\n", $command->getName(), $command->getDescription());
+            $output->writeln(sprintf("  %-20s %s", $command->getName(), $command->getDescription()), 'info');
         }
-
-        echo "\nUse 'php fibers [command] --help' for more information about a command.\n";
     }
 }

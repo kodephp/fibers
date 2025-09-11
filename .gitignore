@@ -1,23 +1,17 @@
 # Dependencies
 /vendor/
-/composer.lock
-
-# Testing
-/phpunit.xml.cache
-/.phpunit.cache/
-/coverage/
 
 # IDE
 /.idea/
 /.vscode/
-/.trae/
 
 # OS
 /.DS_Store
 /Thumbs.db
 
-# Examples
-/examples/sample_files/
+# Build
+/composer.lock
 
-# Composer
-/bin/.phpunit/
+# Testing
+/.phpunit.result.cache
+/phpunit.xml

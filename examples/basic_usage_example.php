@@ -7,197 +7,162 @@
  * - Simple fiber execution
  * - Fiber pool usage
  * - Channel communication
- * - Context passing
+ * - Event handling
  */
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
+use Nova\Fibers\Facades\Fiber;
+use Nova\Fibers\Core\FiberPool;
+use Nova\Fibers\Channel\Channel;
+use Nova\Fibers\Event\EventBus;
 use Nova\Fibers\Context\Context;
 use Nova\Fibers\Context\ContextManager;
 
 echo "=== Basic Usage Example ===\n\n";
 
-// 1. Simple Fiber Execution
+// 1. Simple fiber execution
 echo "1. Simple Fiber Execution:\n";
-$fiber = new Fiber(function () {
-    echo "  Inside fiber\n";
-    Fiber::suspend();
-    echo "  Resumed fiber\n";
-    return "Fiber result";
+$result = Fiber::run(function() {
+    usleep(100000); // 100ms
+    return "Hello from Fiber!";
 });
 
-$fiber->start();
-$fiber->resume();
-$result = $fiber->getReturn();
 echo "  Result: {$result}\n\n";
 
-// 2. Fiber Pool Usage
+// 2. Fiber pool usage
 echo "2. Fiber Pool Usage:\n";
-// Note: In a real application, you would use the actual FiberPool implementation
-// For this example, we'll simulate the usage
-
-class SimpleFiberPool {
-    private $size;
-    private $fibers = [];
-    
-    public function __construct($size = 4) {
-        $this->size = $size;
-    }
-    
-    public function submit(callable $task) {
-        $fiber = new Fiber($task);
-        $this->fibers[] = $fiber;
-        return $fiber;
-    }
-    
-    public function run() {
-        foreach ($this->fibers as $fiber) {
-            if (!$fiber->isStarted()) {
-                $fiber->start();
-            } elseif ($fiber->isSuspended()) {
-                $fiber->resume();
-            }
-        }
-        
-        // Wait for all fibers to complete
-        foreach ($this->fibers as $fiber) {
-            while ($fiber->isRunning()) {
-                Fiber::suspend();
-            }
-        }
-    }
-}
-
-$pool = new SimpleFiberPool(3);
+$pool = new FiberPool([
+    'size' => 4,
+    'name' => 'example-pool'
+]);
 
 $tasks = [];
 for ($i = 1; $i <= 3; $i++) {
-    $taskId = $i;
-    $pool->submit(function() use ($taskId) {
-        echo "  Task {$taskId} started\n";
+    $tasks[] = function() use ($i) {
         usleep(100000); // 100ms
-        echo "  Task {$taskId} completed\n";
-        return "Result from task {$taskId}";
-    });
+        return "Task {$i} completed";
+    };
 }
 
-echo "  Starting fiber pool...\n";
-$pool->run();
-echo "  Fiber pool completed\n\n";
+$results = $pool->concurrent($tasks);
+foreach ($results as $index => $result) {
+    echo "  {$result}\n";
+}
+echo "\n";
 
-// 3. Channel Communication
+// 3. Channel communication
 echo "3. Channel Communication:\n";
-// Note: In a real application, you would use the actual Channel implementation
-// For this example, we'll simulate a simple channel
-
-class SimpleChannel {
-    private $queue = [];
-    private $closed = false;
-    
-    public function push($data) {
-        if ($this->closed) {
-            throw new RuntimeException("Cannot push to closed channel");
-        }
-        $this->queue[] = $data;
-    }
-    
-    public function pop() {
-        if (empty($this->queue) && $this->closed) {
-            return null;
-        }
-        
-        while (empty($this->queue) && !$this->closed) {
-            Fiber::suspend();
-        }
-        
-        return array_shift($this->queue);
-    }
-    
-    public function close() {
-        $this->closed = true;
-    }
-}
-
-$channel = new SimpleChannel();
+$channel = Channel::make('example-channel', 2);
 
 // Producer fiber
-$producer = new Fiber(function() use ($channel) {
+$producer = new \Fiber(function() use ($channel) {
     for ($i = 1; $i <= 3; $i++) {
         echo "  Sending message {$i}\n";
         $channel->push("Message {$i}");
         usleep(50000); // 50ms
     }
     $channel->close();
-    echo "  Producer finished\n";
 });
 
 // Consumer fiber
-$consumer = new Fiber(function() use ($channel) {
-    while (true) {
-        $message = $channel->pop();
-        if ($message === null) {
-            break;
-        }
+$consumer = new \Fiber(function() use ($channel) {
+    while (($message = $channel->pop(1.0)) !== false) { // 1 second timeout
         echo "  Received: {$message}\n";
-        usleep(30000); // 30ms
+        usleep(50000); // 50ms
     }
-    echo "  Consumer finished\n";
 });
 
 $producer->start();
 $consumer->start();
 
-// Run both fibers until completion
-while ($producer->isRunning() || $consumer->isRunning()) {
-    if ($producer->isSuspended()) {
-        $producer->resume();
-    }
-    if ($consumer->isSuspended()) {
-        $consumer->resume();
-    }
+// Wait for fibers to complete
+while ($producer->isTerminated() === false || $consumer->isTerminated() === false) {
     usleep(10000); // 10ms
 }
-
 echo "\n";
 
-// 4. Context Passing
-echo "4. Context Passing:\n";
+// 4. Event handling
+echo "4. Event Handling:\n";
 
-// Create a context
-$context = new Context('main_context');
-$context = $context->withValue('user_id', 42);
-$context = $context->withValue('session_id', 'sess_' . uniqid());
-$context = $context->withValue('request_time', time());
+// 定义一个简单的事件类
+class UserEvent {
+    public $type;
+    public $data;
+    
+    public function __construct($type, $data) {
+        $this->type = $type;
+        $this->data = $data;
+    }
+}
 
-// Set the context as current
-ContextManager::setCurrentContext($context);
+EventBus::on('user.registered', function($event) {
+    echo "  User registered: {$event->data['name']} (ID: {$event->data['id']})\n";
+});
 
-// Access context in main thread
-echo "  Main thread context:\n";
+EventBus::on('user.activated', function($event) {
+    echo "  User activated: {$event->data['name']} (ID: {$event->data['id']})\n";
+});
+
+// Fire events
+EventBus::fire(new UserEvent('user.registered', ['id' => 1, 'name' => 'John Doe']));
+EventBus::fire(new UserEvent('user.activated', ['id' => 1, 'name' => 'John Doe']));
+echo "\n";
+
+// 5. Context usage
+echo "5. Context Usage:\n";
+
+// Initialize ContextManager if not already initialized
+if (!ContextManager::getCurrentContext()) {
+    ContextManager::setCurrentContext(new Context('main_context'));
+}
+
+// Set initial context values
+$context = ContextManager::getCurrentContext();
+if ($context) {
+    $context = $context->withValue('user_id', 123);
+    $context = $context->withValue('session_id', uniqid('sess_'));
+    $context = $context->withValue('request_time', date('Y-m-d H:i:s'));
+    ContextManager::setCurrentContext($context);
+} else {
+    $context = new Context('main_context');
+    $context = $context->withValue('user_id', 123);
+    $context = $context->withValue('session_id', uniqid('sess_'));
+    $context = $context->withValue('request_time', date('Y-m-d H:i:s'));
+    ContextManager::setCurrentContext($context);
+}
+
+echo "  Initial context:\n";
 echo "    User ID: " . $context->value('user_id') . "\n";
 echo "    Session ID: " . $context->value('session_id') . "\n";
 echo "    Request Time: " . $context->value('request_time') . "\n";
 
 // Access context in a fiber
-$fiberWithContext = new Fiber(function() {
+$fiberWithContext = new \Fiber(function() {
     $context = ContextManager::getCurrentContext();
-    echo "  Fiber context:\n";
-    echo "    User ID: " . $context->value('user_id') . "\n";
-    echo "    Session ID: " . $context->value('session_id') . "\n";
-    echo "    Request Time: " . $context->value('request_time') . "\n";
-    
-    // Modify context
-    $context = $context->withValue('fiber_executed', true);
-    $context = $context->withValue('fiber_result', 'Success');
-    ContextManager::setCurrentContext($context);
+    if ($context) {
+        echo "  Fiber context:\n";
+        echo "    User ID: " . $context->value('user_id') . "\n";
+        echo "    Session ID: " . $context->value('session_id') . "\n";
+        echo "    Request Time: " . $context->value('request_time') . "\n";
+        
+        // Modify context
+        $context = $context->withValue('fiber_executed', true);
+        $context = $context->withValue('fiber_result', 'Success');
+        ContextManager::setCurrentContext($context);
+    }
 });
 
 $fiberWithContext->start();
 
 // Check updated context
 $updatedContext = ContextManager::getCurrentContext();
-echo "  Updated context:\n";
-echo "    Fiber Executed: " . ($updatedContext->value('fiber_executed') ? 'Yes' : 'No') . "\n";
-echo "    Fiber Result: " . $updatedContext->value('fiber_result', 'N/A') . "\n";
+if ($updatedContext) {
+    echo "  Updated context:\n";
+    echo "    Fiber Executed: " . ($updatedContext->value('fiber_executed') ? 'Yes' : 'No') . "\n";
+    echo "    Fiber Result: " . $updatedContext->value('fiber_result', 'N/A') . "\n";
+} else {
+    echo "  Updated context: N/A\n";
+}
 
 echo "\n=== Basic Usage Example Completed ===\n";
