@@ -1,0 +1,81 @@
+{
+    "name": "nova/fibers",
+    "description": "A robust, framework-agnostic Fiber (纤程) client for PHP 8.1+, inspired by Swoole/Swow but built on native PHP Fibers with graceful fallbacks.",
+    "keywords": [
+        "fiber",
+        "fibers",
+        "coroutine",
+        "concurrent",
+        "async",
+        "pool",
+        "channel",
+        "event",
+        "php81",
+        "php82",
+        "php83",
+        "php84"
+    ],
+    "homepage": "https://github.com/nova-php/fibers",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Nova PHP Team",
+            "email": "nova-team@example.com",
+            "role": "Developer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/nova-php/fibers/issues",
+        "source": "https://github.com/nova-php/fibers"
+    },
+    "require": {
+        "php": "^8.1",
+        "illuminate/database": "^9.0|^10.0",
+        "symfony/console": "^7.3"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.0",
+        "squizlabs/php_codesniffer": "^3.6"
+    },
+    "autoload": {
+        "psr-4": {
+            "Nova\\Fibers\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Nova\\Fibers\\Tests\\": "tests/",
+            "Nova\\Fibers\\Commands\\": "src/Commands/"
+        }
+    },
+    "bin": [
+        "bin/fibers"
+    ],
+    "scripts": {
+        "test": "phpunit",
+        "test-coverage": "phpunit --coverage-html coverage",
+        "cs-check": "phpcs --standard=PSR12 src tests",
+        "cs-fix": "phpcbf --standard=PSR12 src tests",
+        "benchmark": "php examples/benchmark.php",
+        "example:http": "php examples/http_client.php",
+        "example:db": "php examples/database_operations.php",
+        "example:file": "php examples/file_processing.php",
+        "example:run": "php bin/fibers example:run"
+    },
+    "scripts-descriptions": {
+        "test": "Run all tests",
+        "test-coverage": "Run tests with coverage report",
+        "cs-check": "Check code style",
+        "cs-fix": "Fix code style",
+        "benchmark": "Run benchmark tests",
+        "example:http": "Run HTTP client example",
+        "example:db": "Run database operations example",
+        "example:file": "Run file processing example",
+        "example:run": "Run example files to demonstrate nova/fibers functionality"
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

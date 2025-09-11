@@ -1,0 +1,23 @@
+# Dependencies
+/vendor/
+/composer.lock
+
+# Testing
+/phpunit.xml.cache
+/.phpunit.cache/
+/coverage/
+
+# IDE
+/.idea/
+/.vscode/
+/.trae/
+
+# OS
+/.DS_Store
+/Thumbs.db
+
+# Examples
+/examples/sample_files/
+
+# Composer
+/bin/.phpunit/
