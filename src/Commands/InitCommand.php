@@ -1,321 +1,183 @@
 <?php
 
-declare(strict_types=1);
-
 namespace Nova\Fibers\Commands;
 
+use Nova\Fibers\Support\ConfigLocator;
+
 /**
- * 初始化命令类
+ * InitCommand - 初始化命令
  * 
- * 用于生成框架配置文件
+ * 用于生成框架特定的配置文件
  */
-class InitCommand
+class InitCommand extends Command
 {
     /**
-     * 执行初始化命令
-     * 
-     * @param array $options 命令选项
+     * 配置命令
+     *
      * @return void
      */
-    public function handle(array $options = []): void
+    protected function configure(): void
     {
-        // 检测当前运行环境
-        if ($this->isLaravel()) {
-            $this->generateLaravelConfig();
-        } elseif ($this->isSymfony()) {
-            $this->generateSymfonyConfig();
-        } elseif ($this->isYii()) {
-            $this->generateYiiConfig();
-        } elseif ($this->isThinkPHP()) {
-            $this->generateThinkPHPConfig();
+        $this->setName('init')
+             ->setDescription('Initialize configuration file for the current framework')
+             ->setHelp('This command generates a configuration file for the detected framework environment.');
+    }
+
+    /**
+     * 执行命令
+     *
+     * @param InputInterface $input 输入接口
+     * @param OutputInterface $output 输出接口
+     * @return int 命令执行结果
+     */
+    protected function execute(InputInterface $input, OutputInterface $output): int
+    {
+        $output->writeln('<info>Initializing Nova Fibers configuration...</info>');
+        
+        // 检测当前框架环境
+        $framework = $this->detectFramework();
+        
+        if ($framework === null) {
+            $output->writeln('<comment>Unable to detect framework. Generating default configuration...</comment>');
+            $framework = 'default';
         } else {
-            $this->generateGenericConfig();
+            $output->writeln("<info>Detected framework: {$framework}</info>");
+        }
+        
+        // 生成配置文件
+        $result = $this->generateConfigFile($framework, $output);
+        
+        if ($result) {
+            $output->writeln('<info>Configuration file generated successfully!</info>');
+            return self::SUCCESS;
+        } else {
+            $output->writeln('<error>Failed to generate configuration file.</error>');
+            return self::FAILURE;
         }
     }
 
     /**
-     * 检测是否为Laravel环境
-     * 
-     * @return bool 是否为Laravel环境
+     * 检测当前框架环境
+     *
+     * @return string|null 框架名称或null（未检测到）
      */
-    private function isLaravel(): bool
+    private function detectFramework(): ?string
     {
-        return class_exists(\Illuminate\Foundation\Application::class);
+        // 检查Laravel
+        if (class_exists('\Illuminate\Foundation\Application')) {
+            return 'laravel';
+        }
+        
+        // 检查Symfony
+        if (class_exists('\Symfony\Component\HttpKernel\Kernel')) {
+            return 'symfony';
+        }
+        
+        // 检查Yii3
+        if (class_exists('\Yiisoft\Yii\Console\Application') || 
+            class_exists('\Yiisoft\Yii\Web\Application')) {
+            return 'yii3';
+        }
+        
+        // 检查ThinkPHP
+        if (defined('THINK_VERSION') || defined('THINK_PATH')) {
+            return 'thinkphp';
+        }
+        
+        return null;
     }
 
     /**
-     * 检测是否为Symfony环境
-     * 
-     * @return bool 是否为Symfony环境
+     * 生成配置文件
+     *
+     * @param string $framework 框架名称
+     * @param OutputInterface $output 输出接口
+     * @return bool 是否成功生成
      */
-    private function isSymfony(): bool
+    private function generateConfigFile(string $framework, OutputInterface $output): bool
     {
-        return class_exists(\Symfony\Component\HttpKernel\Kernel::class);
+        // 确定目标路径
+        $targetPath = $this->getConfigTargetPath($framework);
+        
+        if ($targetPath === null) {
+            $output->writeln('<error>Unable to determine target path for configuration file.</error>');
+            return false;
+        }
+        
+        // 检查文件是否已存在
+        if (file_exists($targetPath)) {
+            $output->writeln("<comment>Configuration file already exists at: {$targetPath}</comment>");
+            $confirm = $this->askConfirmation($input, $output, 'Do you want to overwrite it? (y/N): ', false);
+            
+            if (!$confirm) {
+                $output->writeln('<info>Operation cancelled.</info>');
+                return true;
+            }
+        }
+        
+        // 生成配置文件
+        $result = ConfigLocator::generateFrameworkConfig($framework, $targetPath);
+        
+        if ($result) {
+            $output->writeln("<info>Configuration file created at: {$targetPath}</info>");
+        } else {
+            $output->writeln("<error>Failed to create configuration file at: {$targetPath}</error>");
+        }
+        
+        return $result;
     }
 
     /**
-     * 检测是否为Yii环境
-     * 
-     * @return bool 是否为Yii环境
+     * 获取配置文件目标路径
+     *
+     * @param string $framework 框架名称
+     * @return string|null 目标路径或null（无法确定）
      */
-    private function isYii(): bool
+    private function getConfigTargetPath(string $framework): ?string
     {
-        return class_exists(\Yii::class);
+        $cwd = getcwd();
+        
+        switch ($framework) {
+            case 'laravel':
+                return $cwd . '/config/fibers.php';
+                
+            case 'symfony':
+                return $cwd . '/config/packages/fibers.yaml';
+                
+            case 'yii3':
+                return $cwd . '/config/fibers.php';
+                
+            case 'thinkphp':
+                return $cwd . '/config/fibers.php';
+                
+            default:
+                return $cwd . '/config/fibers.php';
+        }
     }
 
     /**
-     * 检测是否为ThinkPHP环境
-     * 
-     * @return bool 是否为ThinkPHP环境
+     * 询问用户确认
+     *
+     * @param InputInterface $input 输入接口
+     * @param OutputInterface $output 输出接口
+     * @param string $question 问题
+     * @param bool $default 默认答案
+     * @return bool 用户答案
      */
-    private function isThinkPHP(): bool
+    private function askConfirmation(InputInterface $input, OutputInterface $output, string $question, bool $default = true): bool
     {
-        return defined('THINK_VERSION');
-    }
-
-    /**
-     * 生成Laravel配置文件
-     * 
-     * @return void
-     */
-    private function generateLaravelConfig(): void
-    {
-        $configPath = getcwd() . '/config/fibers.php';
+        // 简单实现，实际应用中可能需要更复杂的交互
+        $output->write($question);
+        $handle = fopen("php://stdin", "r");
+        $line = fgets($handle);
+        fclose($handle);
         
-        if (file_exists($configPath)) {
-            echo "Configuration file already exists: {$configPath}\n";
-            return;
+        $answer = trim($line);
+        
+        if (empty($answer)) {
+            return $default;
         }
         
-        $configContent = <<<'EOT'
-<?php
-
-return [
-    /*
-    |--------------------------------------------------------------------------
-    | Fiber Pool Configuration
-    |--------------------------------------------------------------------------
-    |
-    | Here you may configure the default fiber pool settings.
-    |
-    */
-
-    'default_pool' => [
-        'size' => env('FIBER_POOL_SIZE', \Nova\Fibers\Support\CpuInfo::get() * 4),
-        'timeout' => 30,
-        'max_retries' => 3,
-    ],
-
-    /*
-    |--------------------------------------------------------------------------
-    | Channels Configuration
-    |--------------------------------------------------------------------------
-    |
-    | Here you may configure the channels used by your application.
-    |
-    */
-
-    'channels' => [
-        'default' => [
-            'buffer_size' => 100,
-        ],
-    ],
-
-    /*
-    |--------------------------------------------------------------------------
-    | Features Configuration
-    |--------------------------------------------------------------------------
-    |
-    | Here you may enable or disable specific features.
-    |
-    */
-
-    'features' => [
-        'auto_suspend_io' => true,
-        'enable_monitoring' => true,
-    ],
-];
-EOT;
-        
-        if (!is_dir(dirname($configPath))) {
-            mkdir(dirname($configPath), 0755, true);
-        }
-        
-        file_put_contents($configPath, $configContent);
-        echo "Laravel configuration file created: {$configPath}\n";
-    }
-
-    /**
-     * 生成Symfony配置文件
-     * 
-     * @return void
-     */
-    private function generateSymfonyConfig(): void
-    {
-        $configPath = getcwd() . '/config/packages/fibers.yaml';
-        
-        if (file_exists($configPath)) {
-            echo "Configuration file already exists: {$configPath}\n";
-            return;
-        }
-        
-        $configContent = <<<'EOT'
-# Fiber Configuration
-nova_fibers:
-    default_pool:
-        size: '%env(int:FIBER_POOL_SIZE)%'
-        timeout: 30
-        max_retries: 3
-
-    channels:
-        default:
-            buffer_size: 100
-
-    features:
-        auto_suspend_io: true
-        enable_monitoring: true
-EOT;
-        
-        if (!is_dir(dirname($configPath))) {
-            mkdir(dirname($configPath), 0755, true);
-        }
-        
-        file_put_contents($configPath, $configContent);
-        echo "Symfony configuration file created: {$configPath}\n";
-    }
-
-    /**
-     * 生成Yii配置文件
-     * 
-     * @return void
-     */
-    private function generateYiiConfig(): void
-    {
-        $configPath = getcwd() . '/config/fibers.php';
-        
-        if (file_exists($configPath)) {
-            echo "Configuration file already exists: {$configPath}\n";
-            return;
-        }
-        
-        $configContent = <<<'EOT'
-<?php
-
-return [
-    'components' => [
-        'fiber' => [
-            'class' => \Nova\Fibers\Core\FiberPool::class,
-            'size' => $_ENV['FIBER_POOL_SIZE'] ?? \Nova\Fibers\Support\CpuInfo::get() * 4,
-            'timeout' => 30,
-            'maxRetries' => 3,
-        ],
-    ],
-    'container' => [
-        'definitions' => [
-            \Nova\Fibers\Channel\Channel::class => [
-                'default' => [
-                    'bufferSize' => 100,
-                ],
-            ],
-        ],
-    ],
-];
-EOT;
-        
-        if (!is_dir(dirname($configPath))) {
-            mkdir(dirname($configPath), 0755, true);
-        }
-        
-        file_put_contents($configPath, $configContent);
-        echo "Yii configuration file created: {$configPath}\n";
-    }
-
-    /**
-     * 生成ThinkPHP配置文件
-     * 
-     * @return void
-     */
-    private function generateThinkPHPConfig(): void
-    {
-        $configPath = getcwd() . '/config/fibers.php';
-        
-        if (file_exists($configPath)) {
-            echo "Configuration file already exists: {$configPath}\n";
-            return;
-        }
-        
-        $configContent = <<<'EOT'
-<?php
-
-return [
-    // Fiber Pool Configuration
-    'fiber_pool' => [
-        'size' => $_ENV['FIBER_POOL_SIZE'] ?? \Nova\Fibers\Support\CpuInfo::get() * 4,
-        'timeout' => 30,
-        'max_retries' => 3,
-    ],
-
-    // Channels Configuration
-    'channels' => [
-        'default' => [
-            'buffer_size' => 100,
-        ],
-    ],
-
-    // Features Configuration
-    'features' => [
-        'auto_suspend_io' => true,
-        'enable_monitoring' => true,
-    ],
-];
-EOT;
-        
-        if (!is_dir(dirname($configPath))) {
-            mkdir(dirname($configPath), 0755, true);
-        }
-        
-        file_put_contents($configPath, $configContent);
-        echo "ThinkPHP configuration file created: {$configPath}\n";
-    }
-
-    /**
-     * 生成通用配置文件
-     * 
-     * @return void
-     */
-    private function generateGenericConfig(): void
-    {
-        $configPath = getcwd() . '/fibers-config.php';
-        
-        if (file_exists($configPath)) {
-            echo "Configuration file already exists: {$configPath}\n";
-            return;
-        }
-        
-        $configContent = <<<'EOT'
-<?php
-
-return [
-    'default_pool' => [
-        'size' => \Nova\Fibers\Support\CpuInfo::get() * 4,
-        'timeout' => 30,
-        'max_retries' => 3,
-    ],
-
-    'channels' => [
-        'default' => [
-            'buffer_size' => 100,
-        ],
-    ],
-
-    'features' => [
-        'auto_suspend_io' => true,
-        'enable_monitoring' => true,
-    ],
-];
-EOT;
-        
-        file_put_contents($configPath, $configContent);
-        echo "Generic configuration file created: {$configPath}\n";
+        return strtolower($answer[0]) === 'y';
     }
 }

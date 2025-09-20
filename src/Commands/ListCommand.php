@@ -10,43 +10,34 @@ namespace Nova\Fibers\Commands;
 class ListCommand extends Command
 {
     /**
-     * 构造函数
+     * ListCommand 构造函数
      */
     public function __construct()
     {
-        parent::__construct('list', 'List all available commands');
-    }
-
-    /**
-     * 配置命令
-     * 
-     * @return void
-     */
-    public function configure(): void
-    {
-        // 这个命令不需要额外的参数或选项
+        $this->setName('list')
+             ->setDescription('List all available commands');
     }
 
     /**
      * 执行命令
      * 
-     * @param InputInterface $input 输入接口
-     * @param OutputInterface $output 输出接口
-     * @return int 命令执行结果
+     * @param array $input 输入参数
+     * @return int 退出码
      */
-    public function execute(InputInterface $input, OutputInterface $output): int
+    public function handle(array $input = []): int
     {
+        global $app;
+        $output = new Output();
+        
         $output->writeln("Available commands:", 'info');
         
-        // 获取应用中的所有命令
-        global $app;
         if (isset($app) && $app instanceof Application) {
             $commands = $app->all();
             foreach ($commands as $command) {
                 $output->writeln(sprintf("  %-20s %s", $command->getName(), $command->getDescription()), 'info');
             }
         } else {
-            $output->writeln("  No commands available.", 'warning');
+            $output->writeln("  No commands available.", 'error');
         }
         
         return 0;

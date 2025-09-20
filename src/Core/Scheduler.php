@@ -10,7 +10,7 @@ use Nova\Fibers\Channel\Channel;
 /**
  * 调度器类
  * 
- * 管理和调度纤程任务执行
+ * 管理和调度纤程任务执行，基于事件循环实现
  */
 class Scheduler
 {
@@ -29,22 +29,39 @@ class Scheduler
     protected bool $running = false;
 
     /**
+     * 事件循环实例
+     * 
+     * @var EventLoop
+     */
+    protected EventLoop $eventLoop;
+
+    /**
+     * 活跃纤程列表
+     * 
+     * @var array<string, Fiber>
+     */
+    protected array $fibers = [];
+
+    /**
      * 构造函数
      */
     public function __construct()
     {
         $this->taskQueue = new Channel('scheduler_queue', 1000);
+        $this->eventLoop = EventLoop::getInstance();
     }
 
     /**
      * 添加任务到调度器
      * 
      * @param callable $task 要执行的任务
-     * @return void
+     * @return string 任务ID
      */
-    public function addTask(callable $task): void
+    public function addTask(callable $task): string
     {
-        $this->taskQueue->push($task);
+        $taskId = uniqid('task_', true);
+        $this->taskQueue->push(['id' => $taskId, 'task' => $task]);
+        return $taskId;
     }
 
     /**
@@ -56,18 +73,52 @@ class Scheduler
     {
         $this->running = true;
         
-        while ($this->running) {
-            // 从任务队列获取任务
-            $task = $this->taskQueue->pop(0.1); // 100ms超时
+        // 使用事件循环处理任务队列
+        $this->eventLoop->repeat(0.001, function() {
+            if (!$this->running) {
+                $this->eventLoop->stop();
+                return;
+            }
             
-            if ($task !== null) {
+            // 尝试从任务队列获取任务（非阻塞）
+            $taskData = $this->taskQueue->pop(0);
+            
+            if ($taskData !== null) {
                 // 创建并启动纤程执行任务
-                $fiber = new Fiber($task);
+                $fiber = new Fiber($taskData['task']);
+                $this->fibers[$taskData['id']] = $fiber;
                 $fiber->start();
             }
             
-            // 避免CPU占用过高
-            usleep(1000);
+            // 检查活跃纤程状态
+            $this->checkFibers();
+        });
+        
+        // 运行事件循环
+        $this->eventLoop->run();
+    }
+
+    /**
+     * 检查纤程状态
+     * 
+     * @return void
+     */
+    private function checkFibers(): void
+    {
+        foreach ($this->fibers as $taskId => $fiber) {
+            if ($fiber->isTerminated()) {
+                // 移除已完成的纤程
+                unset($this->fibers[$taskId]);
+            } elseif ($fiber->isSuspended()) {
+                // 恢复挂起的纤程
+                try {
+                    $fiber->resume();
+                } catch (\Throwable $e) {
+                    // 记录错误并移除纤程
+                    error_log("Error resuming fiber $taskId: " . $e->getMessage());
+                    unset($this->fibers[$taskId]);
+                }
+            }
         }
     }
 
@@ -89,5 +140,15 @@ class Scheduler
     public function getTaskQueue(): Channel
     {
         return $this->taskQueue;
+    }
+    
+    /**
+     * 获取活跃纤程数量
+     * 
+     * @return int 活跃纤程数量
+     */
+    public function getActiveFiberCount(): int
+    {
+        return count($this->fibers);
     }
 }

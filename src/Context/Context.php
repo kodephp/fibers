@@ -1,137 +1,160 @@
 <?php
 
-declare(strict_types=1);
-
 namespace Nova\Fibers\Context;
 
 /**
- * 上下文类
+ * Context - 上下文管理实现
  * 
- * 提供类似Go语言的上下文机制，用于在纤程间传递请求范围的值
+ * 提供键值对存储的上下文，支持继承和取消
  */
 class Context
 {
     /**
-     * 上下文数据
-     * 
-     * @var array
+     * @var array 上下文数据
      */
-    private array $data = [];
+    private array $values = [];
 
     /**
-     * 父级上下文
-     * 
-     * @var Context|null
+     * @var Context|null 父级上下文
      */
     private ?Context $parent;
 
     /**
-     * 上下文ID
-     * 
-     * @var string
+     * @var bool 上下文是否已取消
      */
-    private string $id;
+    private bool $cancelled = false;
 
     /**
-     * 构造上下文
-     * 
-     * @param string $id 上下文ID
+     * @var string|null 取消原因
+     */
+    private ?string $cancelReason = null;
+
+    /**
+     * 构造函数
+     *
      * @param Context|null $parent 父级上下文
      */
-    public function __construct(string $id, ?Context $parent = null)
+    public function __construct(?Context $parent = null)
     {
-        $this->id = $id;
         $this->parent = $parent;
     }
 
     /**
-     * 获取上下文ID
-     * 
-     * @return string 上下文ID
-     */
-    public function getId(): string
-    {
-        return $this->id;
-    }
-
-    /**
-     * 创建带有值的新上下文
-     * 
+     * 设置上下文值
+     *
      * @param string $key 键
      * @param mixed $value 值
-     * @return Context 新上下文
+     * @return void
      */
-    public function withValue(string $key, mixed $value): Context
+    public function set(string $key, mixed $value): void
     {
-        $context = new static($this->id, $this);
-        $context->data[$key] = $value;
-        return $context;
+        if ($this->cancelled) {
+            throw new \RuntimeException("Cannot set value on cancelled context");
+        }
+        
+        $this->values[$key] = $value;
     }
 
     /**
-     * 获取上下文中的值
-     * 
+     * 获取上下文值
+     *
      * @param string $key 键
-     * @param mixed $default 默认值
      * @return mixed 值
      */
-    public function value(string $key, mixed $default = null): mixed
+    public function get(string $key): mixed
     {
-        if (array_key_exists($key, $this->data)) {
-            return $this->data[$key];
+        if (array_key_exists($key, $this->values)) {
+            return $this->values[$key];
         }
-
-        if ($this->parent !== null) {
-            return $this->parent->value($key, $default);
+        
+        if ($this->parent) {
+            return $this->parent->get($key);
         }
-
-        return $default;
+        
+        return null;
     }
 
     /**
-     * 获取所有上下文数据
-     * 
-     * @return array 所有数据
-     */
-    public function all(): array
-    {
-        $data = $this->data;
-        if ($this->parent !== null) {
-            $data = array_merge($this->parent->all(), $data);
-        }
-        return $data;
-    }
-
-    /**
-     * 检查上下文中是否存在指定键
-     * 
+     * 检查上下文是否包含指定键
+     *
      * @param string $key 键
-     * @return bool 是否存在
+     * @return bool 是否包含
      */
     public function has(string $key): bool
     {
-        if (array_key_exists($key, $this->data)) {
+        if (array_key_exists($key, $this->values)) {
             return true;
         }
-
-        if ($this->parent !== null) {
+        
+        if ($this->parent) {
             return $this->parent->has($key);
         }
-
+        
         return false;
     }
 
     /**
-     * 创建子上下文
-     * 
-     * @param string|null $id 子上下文ID，如果为null则自动生成
-     * @return Context 子上下文
+     * 取消上下文
+     *
+     * @param string|null $reason 取消原因
+     * @return void
      */
-    public function child(?string $id = null): Context
+    public function cancel(?string $reason = null): void
     {
-        if ($id === null) {
-            $id = uniqid($this->id . '-', true);
+        $this->cancelled = true;
+        $this->cancelReason = $reason;
+        
+        // 取消所有子上下文
+        // 注意：这里需要在ContextManager中实现子上下文的管理
+    }
+
+    /**
+     * 检查上下文是否已取消
+     *
+     * @return bool 是否已取消
+     */
+    public function isCancelled(): bool
+    {
+        if ($this->cancelled) {
+            return true;
         }
-        return new static($id, $this);
+        
+        if ($this->parent) {
+            return $this->parent->isCancelled();
+        }
+        
+        return false;
+    }
+
+    /**
+     * 获取取消原因
+     *
+     * @return string|null 取消原因
+     */
+    public function getCancelReason(): ?string
+    {
+        if ($this->cancelled) {
+            return $this->cancelReason;
+        }
+        
+        if ($this->parent) {
+            return $this->parent->getCancelReason();
+        }
+        
+        return null;
+    }
+
+    /**
+     * 派生新的上下文
+     *
+     * @return Context 新的上下文
+     */
+    public function derive(): Context
+    {
+        if ($this->cancelled) {
+            throw new \RuntimeException("Cannot derive from cancelled context");
+        }
+        
+        return new Context($this);
     }
 }

@@ -4,67 +4,39 @@ declare(strict_types=1);
 
 namespace Nova\Fibers\Commands;
 
-use Symfony\Component\Console\Command\Command;
-use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Output\OutputInterface;
-use Symfony\Component\Console\Input\InputOption;
-
 /**
  * 启动Web Profiler面板命令
  */
 class StartProfilerCommand extends Command
 {
     /**
-     * 配置命令
-     *
-     * @return void
+     * 构造函数
      */
-    protected function configure(): void
+    public function __construct()
     {
-        $this
-            ->setName('profiler:start')
-            ->setDescription('Start the web profiler panel')
-            ->setHelp('This command starts a built-in web server to display the Fiber Profiler panel')
-            ->addOption(
-                'host',
-                'H',
-                InputOption::VALUE_REQUIRED,
-                'Host to bind to',
-                '127.0.0.1'
-            )
-            ->addOption(
-                'port',
-                'p',
-                InputOption::VALUE_REQUIRED,
-                'Port to listen on',
-                '8080'
-            )
-            ->addOption(
-                'docroot',
-                'd',
-                InputOption::VALUE_REQUIRED,
-                'Document root',
-                __DIR__ . '/../../public'
-            );
+        $this->setName('profiler:start')
+             ->setDescription('Start the web profiler panel')
+             ->addOption('host', 'H', 'Host address to bind to', '127.0.0.1')
+             ->addOption('port', 'p', 'Port number to listen on', '8080')
+             ->addOption('docroot', 'd', 'Document root directory', getcwd() . '/public');
     }
 
     /**
      * 执行命令
      *
-     * @param InputInterface $input 输入
-     * @param OutputInterface $output 输出
+     * @param array $input 输入参数
      * @return int 返回码
      */
-    protected function execute(InputInterface $input, OutputInterface $output): int
+    public function handle(array $input = []): int
     {
-        $host = $input->getOption('host');
-        $port = $input->getOption('port');
-        $docroot = $input->getOption('docroot');
+        $host = $input['options']['host'] ?? '127.0.0.1';
+        $port = $input['options']['port'] ?? '8080';
+        $docroot = $input['options']['docroot'] ?? getcwd() . '/public';
 
-        $output->writeln("<info>Starting web profiler panel...</info>");
-        $output->writeln("<comment>Host: {$host}:{$port}</comment>");
-        $output->writeln("<comment>Document root: {$docroot}</comment>");
-        $output->writeln("<comment>Press Ctrl+C to stop the server</comment>\n");
+        echo "Starting web profiler panel...\n";
+        echo "Host: {$host}:{$port}\n";
+        echo "Document root: {$docroot}\n";
+        echo "Press Ctrl+C to stop the server\n\n";
 
         // 创建public目录
         if (!is_dir($docroot)) {
@@ -88,11 +60,14 @@ FiberProfiler::enable();
 echo WebProfilerPanel::render();
 PHP;
 
-        file_put_contents($indexPath, $indexContent);
+        if (file_put_contents($indexPath, $indexContent) === false) {
+            echo "Error: Failed to create index.php file.\n";
+            return 1;
+        }
 
         // 启动内置Web服务器
         $command = "php -S {$host}:{$port} -t {$docroot}";
-        $output->writeln("<comment>Executing: {$command}</comment>");
+        echo "Executing: {$command}\n";
 
         passthru($command, $returnCode);
 

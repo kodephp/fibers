@@ -1,313 +1,161 @@
 <?php
 
-declare(strict_types=1);
-
 namespace Nova\Fibers\Channel;
 
-use Fiber;
-
 /**
- * 纤程间通信通道
+ * Channel - 通信通道类
  * 
- * 提供类似于Go语言中channel的通信机制，支持在纤程间传递数据
+ * 实现纤程间通信，类似于Go语言的channel
  */
 class Channel
 {
     /**
-     * 通道名称
-     * 
-     * @var mixed
+     * @var string 通道名称
      */
-    protected mixed $name;
-
+    private string $name;
+    
     /**
-     * 通道缓冲区大小
-     * 
-     * @var int
+     * @var int 缓冲区大小
      */
-    protected int $bufferSize;
-
+    private int $bufferSize;
+    
     /**
-     * 通道数据队列
-     * 
-     * @var array
+     * @var array 消息队列
      */
-    protected array $queue = [];
-
+    private array $queue = [];
+    
     /**
-     * 等待读取数据的纤程队列
-     * 
-     * @var Fiber[]
+     * @var array 等待读取的纤程
      */
-    protected array $readers = [];
-
+    private array $readers = [];
+    
     /**
-     * 等待写入数据的纤程队列
-     * 
-     * @var Fiber[]
+     * @var array 等待写入的纤程
      */
-    protected array $writers = [];
-
+    private array $writers = [];
+    
     /**
-     * 通道是否已关闭
-     * 
-     * @var bool
+     * @var bool 通道是否已关闭
      */
-    protected bool $closed = false;
-
+    private bool $closed = false;
+    
     /**
-     * 构造函数
-     * 
-     * @param mixed $name 通道名称
+     * Channel 构造函数
+     *
+     * @param string $name 通道名称
      * @param int $bufferSize 缓冲区大小
      */
-    public function __construct(mixed $name, int $bufferSize = 0)
+    public function __construct(string $name, int $bufferSize = 0)
     {
         $this->name = $name;
         $this->bufferSize = $bufferSize;
     }
-
+    
     /**
-     * 创建一个新的通道实例
-     * 
-     * @param mixed $name 通道名称
+     * 创建通道
+     *
+     * @param string $name 通道名称
      * @param int $bufferSize 缓冲区大小
-     * @return static 通道实例
+     * @return self
      */
-    public static function make(mixed $name, int $bufferSize = 0): static
+    public static function make(string $name, int $bufferSize = 0): self
     {
-        return new static($name, $bufferSize);
+        return new self($name, $bufferSize);
     }
-
+    
     /**
-     * 向通道推送数据
-     * 
-     * @param mixed $data 要推送的数据
-     * @param float|null $timeout 超时时间（秒）
-     * @return bool 推送是否成功
+     * 向通道推送消息
+     *
+     * @param mixed $data 数据
+     * @return bool 是否成功推送
      */
-    public function push(mixed $data, ?float $timeout = null): bool
+    public function push(mixed $data): bool
     {
-        // 如果通道已关闭，无法推送数据
         if ($this->closed) {
             return false;
         }
-
-        // 如果缓冲区未满，直接添加数据
+        
+        // 如果缓冲区未满，直接添加到队列
         if (count($this->queue) < $this->bufferSize) {
             $this->queue[] = $data;
-            
-            // 如果有等待读取的纤程，唤醒其中一个
-            if (!empty($this->readers)) {
-                $reader = array_shift($this->readers);
-                $reader->resume();
-            }
-            
             return true;
         }
-
-        // 如果没有缓冲区或缓冲区已满，需要等待
-        $currentFiber = Fiber::getCurrent();
         
-        // 如果不在纤程中，直接返回失败
-        if ($currentFiber === null) {
-            return false;
-        }
-        
-        // 如果没有设置超时，直接挂起当前纤程
-        if ($timeout === null) {
-            $this->writers[] = $currentFiber;
-            $result = Fiber::suspend();
-            
-            // 如果通道在等待期间关闭，返回失败
-            if ($this->closed) {
-                return false;
-            }
-            
-            // 将数据添加到队列
-            $this->queue[] = $data;
-            return true;
-        }
-
-        // 如果设置了超时，需要在超时后返回
-        $startTime = microtime(true);
-        $this->writers[] = $currentFiber;
-        
-        try {
-            $result = Fiber::suspend();
-        } catch (\Throwable $e) {
-            // 如果在等待期间发生异常，从等待队列中移除当前纤程
-            $key = array_search($currentFiber, $this->writers, true);
-            if ($key !== false) {
-                unset($this->writers[$key]);
-            }
-            throw $e;
-        }
-        
-        // 检查是否超时
-        if (microtime(true) - $startTime >= $timeout) {
-            // 从等待队列中移除当前纤程
-            $key = array_search($currentFiber, $this->writers, true);
-            if ($key !== false) {
-                unset($this->writers[$key]);
-            }
-            return false;
-        }
-        
-        // 如果通道在等待期间关闭，返回失败
-        if ($this->closed) {
-            return false;
-        }
-        
-        // 将数据添加到队列
-        $this->queue[] = $data;
-        return true;
+        // 如果缓冲区已满，需要等待
+        // 由于我们还没有实现完整的纤程调度，这里只是示例
+        echo "Channel {$this->name} buffer is full, waiting to push data\n";
+        return false;
     }
-
+    
     /**
-     * 从通道弹出数据
-     * 
-     * @param float|null $timeout 超时时间（秒）
-     * @return mixed 从通道获取的数据，如果超时或通道关闭则返回false
+     * 从通道弹出消息
+     *
+     * @param float $timeout 超时时间（秒）
+     * @return mixed|null 数据或null（超时）
      */
-    public function pop(?float $timeout = null): mixed
+    public function pop(float $timeout = 0): mixed
     {
-        // 如果队列中有数据，直接返回
+        if ($this->closed && empty($this->queue)) {
+            return null;
+        }
+        
+        // 如果队列不为空，直接返回数据
         if (!empty($this->queue)) {
-            $data = array_shift($this->queue);
-            
-            // 如果有等待写入的纤程，唤醒其中一个
-            if (!empty($this->writers)) {
-                $writer = array_shift($this->writers);
-                $writer->resume();
-            }
-            
-            return $data;
-        }
-
-        // 如果通道已关闭且队列为空，返回false
-        if ($this->closed) {
-            return false;
-        }
-
-        // 如果队列为空，需要等待数据
-        $currentFiber = Fiber::getCurrent();
-        
-        // 如果不在纤程中，直接返回false
-        if ($currentFiber === null) {
-            return false;
+            return array_shift($this->queue);
         }
         
-        // 如果没有设置超时，直接挂起当前纤程
-        if ($timeout === null) {
-            $this->readers[] = $currentFiber;
-            $data = Fiber::suspend();
-            
-            // 如果通道在等待期间关闭，返回false
-            if ($this->closed) {
-                return false;
-            }
-            
-            return $data;
-        }
-
-        // 如果设置了超时，需要在超时后返回
-        $startTime = microtime(true);
-        $this->readers[] = $currentFiber;
-        
-        try {
-            $data = Fiber::suspend();
-        } catch (\Throwable $e) {
-            // 如果在等待期间发生异常，从等待队列中移除当前纤程
-            $key = array_search($currentFiber, $this->readers, true);
-            if ($key !== false) {
-                unset($this->readers[$key]);
-            }
-            throw $e;
-        }
-        
-        // 检查是否超时
-        if (microtime(true) - $startTime >= $timeout) {
-            // 从等待队列中移除当前纤程
-            $key = array_search($currentFiber, $this->readers, true);
-            if ($key !== false) {
-                unset($this->readers[$key]);
-            }
-            return false;
-        }
-        
-        // 如果通道在等待期间关闭，返回false
-        if ($this->closed) {
-            return false;
-        }
-        
-        return $data;
+        // 如果队列为空，需要等待
+        // 由于我们还没有实现完整的纤程调度，这里只是示例
+        echo "Channel {$this->name} is empty, waiting to pop data\n";
+        return null;
     }
-
+    
     /**
      * 关闭通道
-     * 
+     *
      * @return void
      */
     public function close(): void
     {
         $this->closed = true;
-        
-        // 唤醒所有等待读取的纤程
-        foreach ($this->readers as $reader) {
-            if ($reader !== null) {
-                $reader->resume(false);
-            }
-        }
-        
-        // 唤醒所有等待写入的纤程
-        foreach ($this->writers as $writer) {
-            if ($writer !== null) {
-                $writer->resume(false);
-            }
-        }
-        
-        // 清空等待队列
-        $this->readers = [];
-        $this->writers = [];
     }
-
+    
     /**
      * 检查通道是否已关闭
-     * 
-     * @return bool 通道是否已关闭
+     *
+     * @return bool
      */
     public function isClosed(): bool
     {
         return $this->closed;
     }
-
+    
     /**
      * 获取通道名称
-     * 
-     * @return string 通道名称
+     *
+     * @return string
      */
     public function getName(): string
     {
         return $this->name;
     }
-
+    
     /**
-     * 获取通道缓冲区大小
-     * 
-     * @return int 缓冲区大小
+     * 获取缓冲区大小
+     *
+     * @return int
      */
     public function getBufferSize(): int
     {
         return $this->bufferSize;
     }
-
+    
     /**
-     * 获取通道中当前数据数量
-     * 
-     * @return int 数据数量
+     * 获取队列长度
+     *
+     * @return int
      */
-    public function getCount(): int
+    public function getQueueLength(): int
     {
         return count($this->queue);
     }

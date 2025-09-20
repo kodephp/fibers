@@ -131,7 +131,7 @@ return [
 
 ---
 
-### ✅ 2. 纤程池（Fiber Pool）高级用法
+## ✅ 2. 纤程池（Fiber Pool）高级用法
 
 #### 获取 CPU 数量（用于动态配置）
 
@@ -169,7 +169,7 @@ $pool = new FiberPool([
 
 ---
 
-### ✅ 3. 多框架适配方案
+## ✅ 3. 多框架适配方案
 
 #### 统一配置结构 (`config/fibers.php`)
 
@@ -213,7 +213,7 @@ class InitCommand extends Command
 
 ---
 
-### ✅ 4. PHP 8.1 原生注解 + IDE 可识别设计
+## ✅ 4. PHP 8.1 原生注解 + IDE 可识别设计
 
 #### 使用 Attribute 实现元数据标记
 
@@ -250,7 +250,7 @@ class Fiber {}
 
 ---
 
-### ✅ 5. 通信机制：Channel 与 Event Bus
+## ✅ 5. 通信机制：Channel 与 Event Bus
 
 #### 创建通信通道（类似 Go Channel）
 
@@ -285,7 +285,7 @@ EventBus::fire(new PaymentSuccessEvent(['uid' => 123]));
 
 ---
 
-### ✅ 6. 禁用函数检测与环境诊断
+## ✅ 6. 禁用函数检测与环境诊断
 
 #### 检测黑名单函数
 

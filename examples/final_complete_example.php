@@ -88,7 +88,7 @@ $fiber->start();
 
 // 消费者
 $messages = [];
-while (($msg = $channel->pop(1)) !== null) { // 1秒超时
+while (($msg = $channel->pop(1)) !== false) { // 1秒超时
     $messages[] = $msg;
 }
 echo "   接收到的消息: " . implode(', ', $messages) . "\n\n";

@@ -4,14 +4,16 @@ declare(strict_types=1);
 
 namespace Nova\Fibers\Scheduler;
 
+use Fiber;
 use Nova\Fibers\Context\Context;
 use Nova\Fibers\Core\FiberPool;
 use Nova\Fibers\Context\ContextManager;
+use Nova\Fibers\Core\EventLoop;
 
 /**
  * 本地调度器实现
  *
- * 作为分布式调度器的基础实现
+ * 作为分布式调度器的基础实现，基于事件循环
  */
 class LocalScheduler implements DistributedSchedulerInterface
 {
@@ -32,6 +34,11 @@ class LocalScheduler implements DistributedSchedulerInterface
     private array $tasks = [];
 
     /**
+     * @var bool 是否正在运行
+     */
+    private bool $running = false;
+
+    /**
      * 构造函数
      *
      * @param array $poolOptions Fiber池选项
@@ -39,6 +46,20 @@ class LocalScheduler implements DistributedSchedulerInterface
     public function __construct(array $poolOptions = [])
     {
         $this->fiberPool = new FiberPool($poolOptions);
+        $this->setupEventLoop();
+    }
+
+    /**
+     * 设置事件循环
+     * 
+     * @return void
+     */
+    private function setupEventLoop(): void
+    {
+        // 定期检查任务状态
+        EventLoop::repeat(0.01, function() {
+            $this->checkTasks();
+        });
     }
 
     /**
@@ -55,6 +76,11 @@ class LocalScheduler implements DistributedSchedulerInterface
             'result' => null,
             'fiber' => null
         ];
+
+        // 立即调度任务执行
+        EventLoop::defer(function() use ($taskId) {
+            $this->executeTask($taskId);
+        });
 
         return $taskId;
     }
@@ -75,7 +101,7 @@ class LocalScheduler implements DistributedSchedulerInterface
 
         // 如果任务失败，抛出异常
         if ($this->tasks[$taskId]['status'] === 'failed') {
-            throw new \RuntimeException("Task {$taskId} failed");
+            throw new \RuntimeException("Task {$taskId} failed: " . ($this->tasks[$taskId]['result'] instanceof \Throwable ? $this->tasks[$taskId]['result']->getMessage() : 'Unknown error'));
         }
 
         // 启动任务如果还未启动
@@ -87,7 +113,7 @@ class LocalScheduler implements DistributedSchedulerInterface
         $startTime = microtime(true);
         while (
             $this->tasks[$taskId]['status'] !== 'completed' &&
-               $this->tasks[$taskId]['status'] !== 'failed'
+            $this->tasks[$taskId]['status'] !== 'failed'
         ) {
             // 检查超时
             if ($timeout !== null && (microtime(true) - $startTime) > $timeout) {
@@ -99,7 +125,7 @@ class LocalScheduler implements DistributedSchedulerInterface
         }
 
         if ($this->tasks[$taskId]['status'] === 'failed') {
-            throw new \RuntimeException("Task {$taskId} failed");
+            throw new \RuntimeException("Task {$taskId} failed: " . ($this->tasks[$taskId]['result'] instanceof \Throwable ? $this->tasks[$taskId]['result']->getMessage() : 'Unknown error'));
         }
 
         return $this->tasks[$taskId]['result'];
@@ -181,5 +207,16 @@ class LocalScheduler implements DistributedSchedulerInterface
             $this->tasks[$taskId]['result'] = $e;
             $this->tasks[$taskId]['status'] = 'failed';
         }
+    }
+
+    /**
+     * 检查任务状态
+     * 
+     * @return void
+     */
+    private function checkTasks(): void
+    {
+        // 这里可以添加定期检查任务状态的逻辑
+        // 目前只是占位符，实际任务状态变更通过事件驱动
     }
 }

@@ -1,127 +1,133 @@
 <?php
 
-declare(strict_types=1);
-
 namespace Nova\Fibers\Support;
 
-use Nova\Fibers\Support\Utils;
-
 /**
- * 配置管理类
+ * Config - 配置管理类
  * 
- * 用于加载和管理配置文件
+ * 提供配置文件的加载和管理功能
  */
 class Config
 {
     /**
-     * 配置数据
-     * 
-     * @var array
+     * @var array 配置数据
      */
-    private array $config = [];
+    private static array $config = [];
 
     /**
-     * 构造函数
-     * 
-     * @param array|string $config 配置数组或配置文件路径
+     * @var string 配置文件路径
      */
-    public function __construct(array|string $config = [])
-    {
-        if (is_string($config)) {
-            $this->loadFromFile($config);
-        } else {
-            $this->config = $config;
-        }
-    }
+    private static string $configPath = '';
 
     /**
-     * 从文件加载配置
-     * 
-     * @param string $filePath 配置文件路径
+     * 加载配置文件
+     *
+     * @param string $configPath 配置文件路径
      * @return void
      */
-    public function loadFromFile(string $filePath): void
+    public static function load(string $configPath): void
     {
-        if (!file_exists($filePath)) {
-            throw new \InvalidArgumentException("Config file not found: {$filePath}");
-        }
+        self::$configPath = $configPath;
         
-        $extension = pathinfo($filePath, PATHINFO_EXTENSION);
-        
-        switch ($extension) {
-            case 'php':
-                $this->config = require $filePath;
-                break;
-            case 'json':
-                $content = file_get_contents($filePath);
-                $this->config = json_decode($content, true);
-                break;
-            case 'yaml':
-            case 'yml':
-                if (!function_exists('yaml_parse')) {
-                    throw new \RuntimeException('YAML extension is required to parse YAML config files');
-                }
-                $content = file_get_contents($filePath);
-                $this->config = yaml_parse($content);
-                break;
-            default:
-                throw new \InvalidArgumentException("Unsupported config file format: {$extension}");
+        if (file_exists($configPath)) {
+            self::$config = require $configPath;
         }
     }
 
     /**
      * 获取配置值
-     * 
-     * @param string $key 配置键名
+     *
+     * @param string $key 配置键，支持点号分隔的嵌套键
      * @param mixed $default 默认值
      * @return mixed 配置值
      */
-    public function get(string $key, mixed $default = null): mixed
+    public static function get(string $key, $default = null)
     {
-        return Utils::arrayGet($this->config, $key, $default);
+        if (empty(self::$config)) {
+            // 如果配置未加载，尝试自动加载
+            self::autoLoad();
+        }
+
+        $keys = explode('.', $key);
+        $config = self::$config;
+
+        foreach ($keys as $k) {
+            if (!isset($config[$k])) {
+                return $default;
+            }
+            $config = $config[$k];
+        }
+
+        return $config;
     }
 
     /**
      * 设置配置值
-     * 
-     * @param string $key 配置键名
+     *
+     * @param string $key 配置键，支持点号分隔的嵌套键
      * @param mixed $value 配置值
      * @return void
      */
-    public function set(string $key, mixed $value): void
+    public static function set(string $key, $value): void
     {
-        Utils::arraySet($this->config, $key, $value);
+        $keys = explode('.', $key);
+        $config = &self::$config;
+
+        foreach ($keys as $k) {
+            if (!isset($config[$k]) || !is_array($config[$k])) {
+                $config[$k] = [];
+            }
+            $config = &$config[$k];
+        }
+
+        $config = $value;
     }
 
     /**
      * 检查配置是否存在
-     * 
-     * @param string $key 配置键名
+     *
+     * @param string $key 配置键
      * @return bool 是否存在
      */
-    public function has(string $key): bool
+    public static function has(string $key): bool
     {
-        return Utils::arrayGet($this->config, $key, '__NOT_FOUND__') !== '__NOT_FOUND__';
+        return self::get($key, '__NOT_FOUND__') !== '__NOT_FOUND__';
     }
 
     /**
      * 获取所有配置
-     * 
-     * @return array 配置数组
+     *
+     * @return array 所有配置
      */
-    public function all(): array
+    public static function all(): array
     {
-        return $this->config;
+        if (empty(self::$config)) {
+            // 如果配置未加载，尝试自动加载
+            self::autoLoad();
+        }
+
+        return self::$config;
     }
 
     /**
-     * 合并配置
-     * 
-     * @param array $config 要合并的配置
+     * 自动加载配置文件
+     *
      * @return void
      */
-    public function merge(array $config): void
+    private static function autoLoad(): void
     {
-        $this->config = Utils::mergeArrays($this->config, $config);
+        // 尝试从常见的配置目录加载
+        $possiblePaths = [
+            __DIR__ . '/../../config/fibers.php',
+            __DIR__ . '/../../../config/fibers.php',
+            getcwd() . '/config/fibers.php',
+        ];
+
+        foreach ($possiblePaths as $path) {
+            if (file_exists($path)) {
+                self::load($path);
+                return;
+            }
+        }
     }
 }

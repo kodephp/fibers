@@ -1,103 +1,82 @@
 <?php
 
-declare(strict_types=1);
-
 namespace Nova\Fibers\Commands;
 
+use Nova\Fibers\FiberManager;
+use Nova\Fibers\Core\FiberPool;
+
 /**
- * 纤程状态命令
- *
- * @package Nova\Fibers\Commands
+ * StatusCommand - 纤程状态查看命令
+ * 
+ * 用于查看当前运行的纤程ID和状态信息
  */
 class StatusCommand extends Command
 {
     /**
-     * StatusCommand 构造函数
+     * 配置命令
+     *
+     * @return void
      */
-    public function __construct()
+    protected function configure(): void
     {
         $this->setName('status')
-             ->setDescription('Show current fiber status');
+             ->setDescription('Show current fiber status and IDs')
+             ->setHelp('This command displays information about active fibers and their IDs.');
     }
 
     /**
      * 执行命令
      *
-     * @param array $input 输入参数
-     * @return int 退出码
+     * @param InputInterface $input 输入接口
+     * @param OutputInterface $output 输出接口
+     * @return int 命令执行结果
      */
-    public function handle(array $input = []): int
+    protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        echo "Fiber Status Information:\n";
-        echo str_repeat('-', 30) . "\n";
-
-        // 显示 PHP 版本信息
-        echo "PHP Version: " . PHP_VERSION . "\n";
-        echo "Fiber Support: " . ($this->checkFiberSupport() ? "Available" : "Not Available") . "\n";
-
-        // 显示环境信息
-        $this->showEnvironmentInfo();
-
-        // 显示纤程池信息（如果存在）
-        $this->showFiberPoolInfo();
-
-        return 0;
+        $output->writeln('<info>Current Fiber Status:</info>');
+        
+        // 获取纤程池实例
+        $pool = FiberManager::pool();
+        
+        if ($pool === null) {
+            $output->writeln('<comment>No active fiber pool found.</comment>');
+            return self::SUCCESS;
+        }
+        
+        // 显示池信息
+        $output->writeln("Pool Size: " . $pool->getSize());
+        $output->writeln("Active Fibers: " . $pool->getActiveFiberCount());
+        $output->writeln("Idle Fibers: " . $pool->getIdleFiberCount());
+        
+        // 显示通道信息
+        $this->showChannelInfo($output);
+        
+        return self::SUCCESS;
     }
 
     /**
-     * 检查 Fiber 支持
+     * 显示通道信息
      *
-     * @return bool
-     */
-    protected function checkFiberSupport(): bool
-    {
-        return class_exists(\Fiber::class);
-    }
-
-    /**
-     * 显示环境信息
-     *
+     * @param OutputInterface $output 输出接口
      * @return void
      */
-    protected function showEnvironmentInfo(): void
+    private function showChannelInfo(OutputInterface $output): void
     {
-        echo "\nEnvironment Information:\n";
-        echo "  OS: " . PHP_OS . "\n";
-        echo "  SAPI: " . PHP_SAPI . "\n";
-
-        // 显示禁用函数
-        $disabledFunctions = explode(',', ini_get('disable_functions'));
-        $fiberRelated = array_filter($disabledFunctions, function ($func) {
-            return stripos($func, 'fiber') !== false ||
-                   stripos($func, 'pcntl') !== false ||
-                   stripos($func, 'exec') !== false;
-        });
-
-        if (!empty($fiberRelated)) {
-            echo "  Disabled Functions (Fiber-related):\n";
-            foreach ($fiberRelated as $func) {
-                echo "    - {$func}\n";
+        // 这里需要访问ChannelManager或者通过FiberManager获取通道信息
+        // 由于当前设计中没有ChannelManager，我们暂时显示一个提示
+        $output->writeln("\n<comment>Channel information is not yet implemented.</comment>");
+        
+        // 如果将来实现了ChannelManager，可以这样显示：
+        /*
+        $channels = ChannelManager::getAllChannels();
+        if (empty($channels)) {
+            $output->writeln("No active channels.");
+        } else {
+            $output->writeln("Active Channels:");
+            foreach ($channels as $name => $channel) {
+                $output->writeln("  - {$name}: " . $channel->getLength() . " items");
             }
         }
-    }
-
-    /**
-     * 显示纤程池信息
-     *
-     * @return void
-     */
-    protected function showFiberPoolInfo(): void
-    {
-        // 这里可以扩展以显示实际的纤程池信息
-        // 目前只是一个占位符
-        echo "\nFiber Pool Information:\n";
-        echo "  Note: Fiber pool statistics would be shown here when implemented.\n";
-
-        // 如果有 FiberPool 类，可以在这里获取实际信息
-        if (class_exists(\Nova\Fibers\Core\FiberPool::class)) {
-            echo "  FiberPool class: Available\n";
-        } else {
-            echo "  FiberPool class: Not found\n";
-        }
+        */
     }
 }

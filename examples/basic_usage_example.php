@@ -12,7 +12,8 @@
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use Nova\Fibers\Facades\Fiber;
+use Nova\Fibers\Facades\FiberManager;
+use Nova\Fibers\Support\Environment;
 use Nova\Fibers\Core\FiberPool;
 use Nova\Fibers\Channel\Channel;
 use Nova\Fibers\Event\EventBus;
@@ -21,18 +22,31 @@ use Nova\Fibers\Context\ContextManager;
 
 echo "=== Basic Usage Example ===\n\n";
 
+// 检查环境是否支持Fiber
+if (!Environment::supportsFibers()) {
+    echo "Error: Fibers are not supported in this environment!\n";
+    exit(1);
+}
+
 // 1. Simple fiber execution
 echo "1. Simple Fiber Execution:\n";
-$result = Fiber::run(function() {
+$result = FiberManager::run(function() {
     usleep(100000); // 100ms
     return "Hello from Fiber!";
 });
 
 echo "  Result: {$result}\n\n";
+} catch (Exception $e) {
+    echo "  Error: " . $e->getMessage() . "\n\n";
+}
 
 // 2. Fiber pool usage
 echo "2. Fiber Pool Usage:\n";
 $pool = new FiberPool([
+    ]);
+} catch (Exception $e) {
+    echo "  Error: " . $e->getMessage() . "\n\n";
+}
     'size' => 4,
     'name' => 'example-pool'
 ]);
@@ -53,7 +67,8 @@ echo "\n";
 
 // 3. Channel communication
 echo "3. Channel Communication:\n";
-$channel = Channel::make('example-channel', 2);
+try {
+    $channel = Channel::make('example-channel', 2);
 
 // Producer fiber
 $producer = new \Fiber(function() use ($channel) {

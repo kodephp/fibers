@@ -4,68 +4,40 @@ declare(strict_types=1);
 
 namespace Nova\Fibers\Commands;
 
-use Symfony\Component\Console\Command\Command;
-use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Output\OutputInterface;
-use Symfony\Component\Console\Input\InputOption;
-
 /**
  * 初始化分布式调度器配置命令
  */
 class InitSchedulerCommand extends Command
 {
     /**
-     * 配置命令
-     *
-     * @return void
+     * 构造函数
      */
-    protected function configure(): void
+    public function __construct()
     {
-        $this
-            ->setName('scheduler:init')
-            ->setDescription('Initialize distributed scheduler configuration')
-            ->setHelp('This command initializes the configuration for the distributed scheduler')
-            ->addOption(
-                'cluster-nodes',
-                'n',
-                InputOption::VALUE_REQUIRED,
-                'Number of cluster nodes',
-                '3'
-            )
-            ->addOption(
-                'node-address',
-                'a',
-                InputOption::VALUE_REQUIRED,
-                'Node address',
-                '127.0.0.1'
-            )
-            ->addOption(
-                'port',
-                'p',
-                InputOption::VALUE_REQUIRED,
-                'Port number',
-                '8000'
-            );
+        $this->setName('scheduler:init')
+             ->setDescription('Initialize distributed scheduler configuration')
+             ->addOption('cluster-nodes', 'n', 'Number of cluster nodes', '3')
+             ->addOption('node-address', 'a', 'Node address', '127.0.0.1')
+             ->addOption('port', 'p', 'Base port number', '8000');
     }
 
     /**
      * 执行命令
      *
-     * @param InputInterface $input 输入
-     * @param OutputInterface $output 输出
+     * @param array $input 输入参数
      * @return int 返回码
      */
-    protected function execute(InputInterface $input, OutputInterface $output): int
+    public function handle(array $input = []): int
     {
-        $output->writeln('<info>Initializing distributed scheduler configuration...</info>');
+        echo "Initializing distributed scheduler configuration...\n";
 
         // 获取选项值
-        $clusterNodes = $input->getOption('cluster-nodes');
-        $nodeAddress = $input->getOption('node-address');
-        $port = $input->getOption('port');
+        $clusterNodes = $input['options']['cluster-nodes'] ?? '3';
+        $nodeAddress = $input['options']['node-address'] ?? '127.0.0.1';
+        $port = $input['options']['port'] ?? '8000';
 
         // 创建配置目录
-        $configDir = __DIR__ . '/../../config';
+        $configDir = getcwd() . '/config';
         if (!is_dir($configDir)) {
             mkdir($configDir, 0755, true);
         }
@@ -101,16 +73,18 @@ class InitSchedulerCommand extends Command
 
         // 写入配置文件
         $configFile = $configDir . '/scheduler.php';
-        file_put_contents($configFile, "<?php\n\nreturn " . var_export($config, true) . ";\n");
-
-        $output->writeln("<info>Configuration file created at: {$configFile}</info>");
-
-        // 显示配置内容
-        $output->writeln("\n<comment>Generated configuration:</comment>");
-        $output->writeln(json_encode($config, JSON_PRETTY_PRINT));
-
-        $output->writeln("\n<info>Distributed scheduler configuration initialized successfully!</info>");
-
-        return Command::SUCCESS;
+        $content = "<?php\n\nreturn " . var_export($config, true) . ";\n";
+        
+        if (file_put_contents($configFile, $content) !== false) {
+            echo "Configuration file created successfully at: {$configFile}\n";
+            echo "\nGenerated configuration:\n";
+            $displayConfig = $config;
+            echo json_encode($displayConfig, JSON_PRETTY_PRINT) . "\n";
+            echo "\nDistributed scheduler configuration initialized successfully!\n";
+            return 0;
+        } else {
+            echo "Error: Failed to create configuration file.\n";
+            return 1;
+        }
     }
 }

@@ -11,14 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial project structure
 - Core FiberPool implementation
 - Channel communication mechanism
-- Event bus implementation
-- Environment detection and diagnosis tools
-- CPU info detection utilities
-- Configuration management utilities
-- Dependency injection container
-- CLI application with basic commands
-- Composer configuration
-- README documentation
+- EventBus for event-driven programming
+- Environment diagnostic tools
+- Multi-framework configuration generator
+- CLI tools for initialization and management
+- Comprehensive README documentation
 
 ### Changed
 
