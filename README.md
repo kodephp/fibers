@@ -1,13 +1,10 @@
-# 🚀 `nova/fibers` – 高性能 Fiber 线程池与协程调度器
+# 🚀 Kode/Fibers – 高性能 Fiber 线程池与协程调度器
 
 > A robust, framework-agnostic Fiber (纤程) client for PHP 8.1+, inspired by Swoole/Swow but built on native PHP Fibers with graceful fallbacks.
 
-[![Latest Version](https://img.shields.io/packagist/v/nova/fibers.svg?style=flat-square)](https://packagist.org/packages/nova/fibers)
-[![License](https://img.shields.io/packagist/l/nova/fibers.svg?style=flat-square)](LICENSE)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/nova-php/fibers/tests.yml?branch=main)](https://github.com/nova-php/fibers/actions)
-[![Coverage](https://img.shields.io/codecov/c/github/nova-php/fibers?token=XXXXX)](https://codecov.io/gh/nova-php/fibers)
-
----
+[![Latest Version](https://img.shields.io/packagist/v/Kode/fibers.svg?style=flat-square)](https://packagist.org/packages/Kode/fibers)
+[![License](https://img.shields.io/packagist/l/Kode/fibers.svg?style=flat-square)](LICENSE)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/Kode-php/fibers/tests.yml?branch=main)](https://github.com/Kode-php/fibers/actions)
 
 ## ✅ 特性概览
 
@@ -24,12 +21,10 @@
 - 📝 **原生 PHP 8.1 Attributes + PHPDoc 实现 IDE 完整识别**
 - 🚫 **禁用函数检测 + 运行环境诊断**
 
----
-
 ## 📦 安装
 
 ```bash
-composer require nova/fibers
+composer require kode/fibers
 ```
 
 ### 框架快速集成（可选）
@@ -44,30 +39,26 @@ composer require nova/fibers
 
 > 若未提供对应命令，会自动调用内置 CLI 工具进行初始化。
 
----
-
 ## 🧱 架构设计原则
 
 本包采用 **"轻量内核 + 插件扩展"** 设计：
 
 ```php
-Nova\Fibers\Core\FiberPool       // 主纤程池
-Nova\Fibers\Channel\Channel      // 通信通道
-Nova\Fibers\Task\TaskRunner      // 任务执行器
-Nova\Fibers\Support\CpuInfo      // CPU 核心探测
-Nova\Fibers\Contracts\Runnable   // 可运行接口
+Kode\Fibers\Core\FiberPool       // 主纤程池
+Kode\Fibers\Channel\Channel      // 通信通道
+Kode\Fibers\Task\TaskRunner      // 任务执行器
+Kode\Fibers\Support\CpuInfo      // CPU 核心探测
+Kode\Fibers\Contracts\Runnable   // 可运行接口
 ```
 
 所有组件均实现 PSR 标准，支持 DI 容器注入。
-
----
 
 ## 🧪 快速开始
 
 ### 1. 基础使用：一键启动纤程任务
 
 ```php
-use Nova\Fibers\Facades\Fiber;
+use Kode\Fibers\Facades\Fiber;
 
 // 启动一个纤程并等待结果
 $result = Fiber::run(fn() => sleep(1) || 'Hello from Fiber!');
@@ -75,10 +66,38 @@ $result = Fiber::run(fn() => sleep(1) || 'Hello from Fiber!');
 echo $result; // 输出: Hello from Fiber!
 ```
 
+### 3. 使用属性注解
+
+```php
+use Kode\Fibers\Facades\Fiber;
+use Kode\Fibers\Attributes\Timeout;
+use Kode\Fibers\Attributes\Retry;
+use Kode\Fibers\Attributes\Backoff;
+
+class ApiService 
+{
+    #[Timeout(5.0)]
+    #[Retry(3, 1000)]
+    #[Backoff('exponential', 3, 1.0)]
+    public function fetchUser(int $id): array
+    {
+        // 模拟可能失败的API调用
+        if (rand(0, 1) === 0) {
+            throw new \Exception('API call failed');
+        }
+        
+        return json_decode(file_get_contents("https://api.com/users/$id"), true);
+    }
+}
+
+$apiService = new ApiService();
+$result = Fiber::run([$apiService, 'fetchUser'], 123);
+```
+
 ### 2. 使用纤程池（推荐生产环境）
 
 ```php
-use Nova\Fibers\FiberPool;
+use Kode\Fibers\FiberPool;
 
 $pool = new FiberPool([
     'size' => 64,                    // 默认: CPU * 4
@@ -94,8 +113,6 @@ $results = $pool->concurrent([
 
 print_r($results);
 ```
-
----
 
 ## 🧰 核心功能详解
 
@@ -129,14 +146,50 @@ return [
 ];
 ```
 
----
+### ✅ 2. 属性注解系统
 
-## ✅ 2. 纤程池（Fiber Pool）高级用法
+本包支持使用原生PHP 8.1属性注解来配置纤程行为：
+
+#### 支持的属性注解
+
+| 注解 | 说明 | 参数 |
+|------|------|------|
+| `#[Timeout]` | 设置任务超时时间 | `float $seconds` |
+| `#[Retry]` | 设置重试次数和延迟 | `int $maxAttempts`, `int $delay` |
+| `#[Backoff]` | 设置退避策略 | `string $strategy`, `int $maxAttempts`, `float $baseDelay` |
+| `#[FiberSafe]` | 标记方法可在纤程中安全调用 | 无 |
+| `#[ChannelListener]` | 标记方法为通道监听器 | `string $channel` |
+
+#### 使用示例
+
+```php
+use Kode\Fibers\Attributes\Timeout;
+use Kode\Fibers\Attributes\Retry;
+use Kode\Fibers\Attributes\Backoff;
+
+class ApiService 
+{
+    #[Timeout(5.0)]
+    #[Retry(3, 1000)]
+    #[Backoff('exponential', 3, 1.0)]
+    public function fetchUser(int $id): array
+    {
+        // 模拟可能失败的API调用
+        if (rand(0, 1) === 0) {
+            throw new \Exception('API call failed');
+        }
+        
+        return json_decode(file_get_contents("https://api.com/users/$id"), true);
+    }
+}
+```
+
+### ✅ 3. 纤程池（Fiber Pool）高级用法
 
 #### 获取 CPU 数量（用于动态配置）
 
 ```php
-use Nova\Fibers\Support\CpuInfo;
+use Kode\Fibers\Support\CpuInfo;
 
 $cpuCount = CpuInfo::get(); // int
 $defaultPoolSize = $cpuCount * 4; // 推荐设置为 CPU 核心数的 2–4 倍
@@ -167,9 +220,7 @@ $pool = new FiberPool([
 
 > 💡 提示：建议配合异步 I/O 扩展如 `swow` 或 `swoole` 使用以获得最佳性能。
 
----
-
-## ✅ 3. 多框架适配方案
+### ✅ 4. 多框架适配方案
 
 #### 统一配置结构 (`config/fibers.php`)
 
@@ -211,9 +262,7 @@ class InitCommand extends Command
 }
 ```
 
----
-
-## ✅ 4. PHP 8.1 原生注解 + IDE 可识别设计
+### ✅ 5. PHP 8.1 原生注解 + IDE 可识别设计
 
 #### 使用 Attribute 实现元数据标记
 
@@ -248,14 +297,12 @@ class Fiber {}
 
 ✅ 在 PhpStorm / VSCode + Intelephense 中均可获得完整补全！
 
----
-
-## ✅ 5. 通信机制：Channel 与 Event Bus
+### ✅ 6. 通信机制：Channel 与 Event Bus
 
 #### 创建通信通道（类似 Go Channel）
 
 ```php
-use Nova\Fibers\Channel\Channel;
+use Kode\Fibers\Channel\Channel;
 
 $ch = Channel::make('download-results', 10); // 缓冲区大小10
 
@@ -277,20 +324,18 @@ while ($msg = $ch->pop(1)) { // 超时1秒
 #### 发布/订阅模型（EventBus）
 
 ```php
-use Nova\Fibers\Event\EventBus;
+use Kode\Fibers\Event\EventBus;
 
 EventBus::on('payment.success', fn($ev) => notifyAdmin($ev->data));
 EventBus::fire(new PaymentSuccessEvent(['uid' => 123]));
 ```
 
----
-
-## ✅ 6. 禁用函数检测与环境诊断
+### ✅ 7. 禁用函数检测与环境诊断
 
 #### 检测黑名单函数
 
 ```php
-use Nova\Fibers\Support\Environment;
+use Kode\Fibers\Support\Environment;
 
 $issues = Environment::diagnose();
 
@@ -314,8 +359,6 @@ foreach ($issues as $issue) {
 
 > ✅ 我们会在初始化时尝试模拟这些函数的安全替代品。
 
----
-
 ## 📘 使用场景指南
 
 ### 🧩 何时使用 `Fiber::run()`？（一键协程）
@@ -334,8 +377,6 @@ $data = [
 ✅ 优点：零配置、无副作用  
 ❌ 缺点：无法复用、无资源管控
 
----
-
 ### 🏗️ 何时使用 `FiberPool`？（生产推荐）
 
 适用于**高并发服务**，如微服务网关、批量任务处理器：
@@ -353,7 +394,35 @@ $results = $pool->concurrent($jobs);
 - 超时熔断
 - 监控埋点
 
----
+### 🎯 使用属性注解
+
+属性注解提供了一种声明式的方式来配置纤程行为：
+
+```php
+use Kode\Fibers\Facades\Fiber;
+use Kode\Fibers\Attributes\Timeout;
+use Kode\Fibers\Attributes\Retry;
+use Kode\Fibers\Attributes\Backoff;
+
+class ApiService 
+{
+    #[Timeout(5.0)]
+    #[Retry(3, 1000)]
+    #[Backoff('exponential', 3, 1.0)]
+    public function fetchUser(int $id): array
+    {
+        // 模拟可能失败的API调用
+        if (rand(0, 1) === 0) {
+            throw new \Exception('API call failed');
+        }
+        
+        return json_decode(file_get_contents("https://api.com/users/$id"), true);
+    }
+}
+
+// 使用方式
+$result = Fiber::run([new ApiService(), 'fetchUser'], 123);
+```
 
 ## 🛠️ CLI 命令列表
 
@@ -371,8 +440,6 @@ php vendor/bin/fibers cleanup
 php vendor/bin/fibers benchmark --concurrency=1000
 ```
 
----
-
 ## 🧩 扩展建议（未来路线图）
 
 - [ ] Fiber 上下文变量传递（类似 Context）
@@ -380,8 +447,6 @@ php vendor/bin/fibers benchmark --concurrency=1000
 - [ ] Fiber Profiler 可视化面板
 - [ ] 与 Swoole/OpenSwoole/Swow/Workerman 无缝桥接
 - [ ] Fiber-aware ORM（Eloquent/Fixtures）
-
----
 
 ## 📚 参考资料
 
@@ -391,13 +456,9 @@ php vendor/bin/fibers benchmark --concurrency=1000
 - [Go Channels in PHP](https://github.com/amphp/amp)
 - [RevoltPHP Event Loop ](https://github.com/revoltphp/event-loop)
 
----
-
 ## 📄 许可证
 
 MIT License. See [LICENSE](./LICENSE) for full text.
-
----
 
 ## 🙌 贡献者
 
@@ -408,8 +469,8 @@ MIT License. See [LICENSE](./LICENSE) for full text.
 
 ---
 
-> Maintained by **Byte Team - Nova PHP Lab**  
-> 🌐 https://github.com/nova-php/fibers
+> Maintained by **Byte Team - Kode PHP Lab**  
+> 🌐 https://github.com/Kode-php/fibers
 
 ---
 
@@ -424,12 +485,13 @@ MIT License. See [LICENSE](./LICENSE) for full text.
 | README 使用说明详尽 | ✅ |
 | 禁用函数检测 | ✅ |
 | 通信、队列、IO、超时等 | ✅ |
+| 使用 Kode 仓库组件 | ✅ |
 
 ---
 
 📌 **下一步建议：**
 
-1. 创建 GitHub 仓库 `nova-php/fibers`
+1. 创建 GitHub 仓库 `Kode-php/fibers`
 2. 初始化项目结构（`src/`, `tests/`, `config/`, `bin/`）
 3. 实现 `FiberPool`, `Channel`, `Environment` 核心类
 4. 添加 PHPUnit 测试套件
