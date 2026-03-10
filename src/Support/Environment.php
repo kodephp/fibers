@@ -1,112 +1,89 @@
 <?php
 
-namespace Nova\Fibers\Support;
+declare(strict_types=1);
 
-/**
- * Environment - 环境检测类
- * 
- * 提供运行环境检测和诊断功能
- */
+namespace Kode\Fibers\Support;
+
 class Environment
 {
     /**
-     * 诊断运行环境
+     * 检查环境是否满足要求
      *
-     * @return array 诊断结果
+     * @return void
+     * @throws \RuntimeException 如果环境不满足要求
+     */
+    public static function check(): void
+    {
+        // 检查PHP版本
+        if (version_compare(PHP_VERSION, '8.1.0') < 0) {
+            throw new \RuntimeException('PHP version must be 8.1 or higher');
+        }
+    }
+
+    /**
+     * 诊断环境问题
+     *
+     * @return array 问题列表
      */
     public static function diagnose(): array
     {
         $issues = [];
-        
+
         // 检查PHP版本
-        if (version_compare(PHP_VERSION, '8.1.0', '<')) {
+        if (version_compare(PHP_VERSION, '8.1.0') < 0) {
             $issues[] = [
                 'type' => 'php_version',
-                'message' => 'PHP version is too low. Required: 8.1+, Current: ' . PHP_VERSION
+                'message' => 'PHP version must be 8.1 or higher',
+                'recommendation' => 'Upgrade your PHP version to 8.1 or higher'
             ];
         }
-        
-        // 检查Fiber扩展支持
-        if (!extension_loaded('fiber')) {
-            // 注意：在PHP 8.1+中，Fiber是内置的，不需要扩展
-            // 这里只是为了兼容性检查
+
+        // 检查析构函数中的Fiber限制
+        if (PHP_VERSION_ID < 80400) {
             $issues[] = [
-                'type' => 'fiber_support',
-                'message' => 'Fiber support is not available'
+                'type' => 'fiber_unsafe',
+                'message' => 'PHP < 8.4 does not allow Fiber::suspend() in __destruct()',
+                'recommendation' => 'Use safe destruct mode or upgrade to PHP 8.4+'
             ];
         }
-        
-        // 检查禁用的函数
+
+        // 检查禁用函数
         $disabledFunctions = explode(',', ini_get('disable_functions'));
         $disabledFunctions = array_map('trim', $disabledFunctions);
-        
+
         $requiredFunctions = [
-            'shell_exec',
-            'proc_open',
-            'exec'
+            'pcntl_fork' => 'Required for process management',
+            'proc_open' => 'Required for process execution',
+            'exec' => 'Required for command execution'
         ];
-        
-        foreach ($requiredFunctions as $function) {
+
+        foreach ($requiredFunctions as $function => $description) {
             if (in_array($function, $disabledFunctions)) {
                 $issues[] = [
                     'type' => 'function_disabled',
-                    'message' => "Function {$function} is disabled"
+                    'message' => "{$function} is disabled",
+                    'recommendation' => "Enable {$function} or use alternative methods"
                 ];
             }
         }
-        
-        // 检查PCNTL扩展（用于进程管理）
-        if (!extension_loaded('pcntl')) {
-            $issues[] = [
-                'type' => 'extension_missing',
-                'message' => 'PCNTL extension is not loaded'
-            ];
-        }
-        
-        // 检查POSIX扩展（用于进程管理）
-        if (!extension_loaded('posix')) {
-            $issues[] = [
-                'type' => 'extension_missing',
-                'message' => 'POSIX extension is not loaded'
-            ];
-        }
-        
-        // 检查内存限制
-        $memoryLimit = ini_get('memory_limit');
-        if ($memoryLimit !== '-1') {
-            $memoryLimitBytes = self::parseMemoryLimit($memoryLimit);
-            if ($memoryLimitBytes < 128 * 1024 * 1024) { // 128MB
+
+        // 检查必要的扩展
+        $requiredExtensions = [
+            'sockets' => 'Required for socket operations',
+            'pcntl' => 'Required for process control',
+            'posix' => 'Required for POSIX functions'
+        ];
+
+        foreach ($requiredExtensions as $extension => $description) {
+            if (!extension_loaded($extension)) {
                 $issues[] = [
-                    'type' => 'memory_limit',
-                    'message' => 'Memory limit is too low: ' . $memoryLimit
+                    'type' => 'extension_missing',
+                    'message' => "{$extension} extension is not installed",
+                    'recommendation' => "Install the {$extension} extension"
                 ];
             }
         }
-        
+
         return $issues;
-    }
-    
-    /**
-     * 解析内存限制值
-     *
-     * @param string $memoryLimit 内存限制字符串
-     * @return int 字节数
-     */
-    private static function parseMemoryLimit(string $memoryLimit): int
-    {
-        $memoryLimit = trim($memoryLimit);
-        $last = strtolower($memoryLimit[strlen($memoryLimit)-1]);
-        $memoryLimit = (int)$memoryLimit;
-        
-        switch($last) {
-            case 'g':
-                $memoryLimit *= 1024;
-            case 'm':
-                $memoryLimit *= 1024;
-            case 'k':
-                $memoryLimit *= 1024;
-        }
-        
-        return $memoryLimit;
     }
 }

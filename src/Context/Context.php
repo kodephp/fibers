@@ -1,160 +1,194 @@
 <?php
 
-namespace Nova\Fibers\Context;
+declare(strict_types=1);
+
+namespace Kode\Fibers\Context;
+
+use Fiber;
 
 /**
- * Context - 上下文管理实现
- * 
- * 提供键值对存储的上下文，支持继承和取消
+ * Fiber-specific context management
+ *
+ * This class provides fiber-aware context management,
+ * allowing you to store and retrieve context data that is scoped to the current fiber.
  */
 class Context
 {
     /**
-     * @var array 上下文数据
-     */
-    private array $values = [];
-
-    /**
-     * @var Context|null 父级上下文
-     */
-    private ?Context $parent;
-
-    /**
-     * @var bool 上下文是否已取消
-     */
-    private bool $cancelled = false;
-
-    /**
-     * @var string|null 取消原因
-     */
-    private ?string $cancelReason = null;
-
-    /**
-     * 构造函数
+     * 存储每个纤程的上下文实例
      *
-     * @param Context|null $parent 父级上下文
+     * @var array
      */
-    public function __construct(?Context $parent = null)
+    protected static array $contexts = [];
+
+    /**
+     * 上下文数据
+     *
+     * @var array
+     */
+    protected array $data = [];
+
+    /**
+     * 获取当前纤程的上下文
+     *
+     * @return static
+     */
+    public static function current(): static
     {
-        $this->parent = $parent;
+        $fiber = Fiber::getCurrent();
+        $id = $fiber ? spl_object_id($fiber) : 'main';
+        
+        if (!isset(static::$contexts[$id])) {
+            static::$contexts[$id] = new static();
+        }
+        
+        return static::$contexts[$id];
     }
 
     /**
-     * 设置上下文值
+     * 设置上下文数据（支持链式调用）
      *
-     * @param string $key 键
+     * @param string $key 键名
      * @param mixed $value 值
-     * @return void
+     * @return static
      */
-    public function set(string $key, mixed $value): void
+    public static function set(string $key, mixed $value): static
     {
-        if ($this->cancelled) {
-            throw new \RuntimeException("Cannot set value on cancelled context");
-        }
-        
-        $this->values[$key] = $value;
+        $context = static::current();
+        $context->data[$key] = $value;
+        return $context;
     }
 
     /**
-     * 获取上下文值
+     * 获取上下文数据
      *
-     * @param string $key 键
-     * @return mixed 值
+     * @param string $key 键名
+     * @param mixed $default 默认值
+     * @return mixed
      */
-    public function get(string $key): mixed
+    public static function get(string $key, mixed $default = null): mixed
     {
-        if (array_key_exists($key, $this->values)) {
-            return $this->values[$key];
-        }
-        
-        if ($this->parent) {
-            return $this->parent->get($key);
-        }
-        
-        return null;
+        $context = static::current();
+        return $context->data[$key] ?? $default;
     }
 
     /**
-     * 检查上下文是否包含指定键
+     * 检查上下文数据是否存在
      *
-     * @param string $key 键
-     * @return bool 是否包含
+     * @param string $key 键名
+     * @return bool
      */
-    public function has(string $key): bool
+    public static function has(string $key): bool
     {
-        if (array_key_exists($key, $this->values)) {
+        $context = static::current();
+        return isset($context->data[$key]);
+    }
+
+    /**
+     * 删除上下文数据
+     *
+     * @param string $key 键名
+     * @return bool 是否成功删除
+     */
+    public static function delete(string $key): bool
+    {
+        $context = static::current();
+        if (isset($context->data[$key])) {
+            unset($context->data[$key]);
             return true;
         }
-        
-        if ($this->parent) {
-            return $this->parent->has($key);
-        }
-        
         return false;
     }
 
     /**
-     * 取消上下文
+     * 批量设置上下文数据
      *
-     * @param string|null $reason 取消原因
+     * @param array $data 数据数组
      * @return void
      */
-    public function cancel(?string $reason = null): void
+    public static function setMultiple(array $data): void
     {
-        $this->cancelled = true;
-        $this->cancelReason = $reason;
-        
-        // 取消所有子上下文
-        // 注意：这里需要在ContextManager中实现子上下文的管理
+        $context = static::current();
+        foreach ($data as $key => $value) {
+            $context->data[$key] = $value;
+        }
     }
 
     /**
-     * 检查上下文是否已取消
+     * 获取所有上下文数据
      *
-     * @return bool 是否已取消
+     * @return array
      */
-    public function isCancelled(): bool
+    public static function getAll(): array
     {
-        if ($this->cancelled) {
-            return true;
-        }
-        
-        if ($this->parent) {
-            return $this->parent->isCancelled();
-        }
-        
-        return false;
+        return static::current()->data;
     }
 
     /**
-     * 获取取消原因
+     * 清空当前纤程的上下文数据（支持链式调用）
      *
-     * @return string|null 取消原因
+     * @return static
      */
-    public function getCancelReason(): ?string
+    public static function clear(): static
     {
-        if ($this->cancelled) {
-            return $this->cancelReason;
-        }
+        $fiber = Fiber::getCurrent();
+        $id = $fiber ? spl_object_id($fiber) : 'main';
         
-        if ($this->parent) {
-            return $this->parent->getCancelReason();
+        if (isset(static::$contexts[$id])) {
+            static::$contexts[$id]->data = [];
         }
-        
-        return null;
+        return static::current();
     }
 
     /**
-     * 派生新的上下文
+     * 继承父纤程的上下文数据
      *
-     * @return Context 新的上下文
+     * @return void
      */
-    public function derive(): Context
+    public static function inherit(): void
     {
-        if ($this->cancelled) {
-            throw new \RuntimeException("Cannot derive from cancelled context");
+        $currentFiber = Fiber::getCurrent();
+        if (!$currentFiber) {
+            return; // 在主线程中，没有父纤程
         }
         
-        return new Context($this);
+        // 获取调用堆栈，找到父纤程
+        $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 10);
+        $parentFiberId = null;
+        
+        // 查找可能的父纤程
+        foreach ($backtrace as $frame) {
+            if (isset($frame['object']) && $frame['object'] instanceof Fiber) {
+                $parentFiberId = spl_object_id($frame['object']);
+                break;
+            }
+        }
+        
+        // 如果找到父纤程，继承其上下文
+        if ($parentFiberId && isset(static::$contexts[$parentFiberId])) {
+            $currentId = spl_object_id($currentFiber);
+            static::$contexts[$currentId] = clone static::$contexts[$parentFiberId];
+        }
+    }
+
+    /**
+     * 导出上下文数据为可序列化的数组
+     *
+     * @return array
+     */
+    public static function export(): array
+    {
+        return static::getAll();
+    }
+
+    /**
+     * 从数组导入上下文数据
+     *
+     * @param array $data 序列化的上下文数据
+     * @return void
+     */
+    public static function import(array $data): void
+    {
+        static::setMultiple($data);
     }
 }

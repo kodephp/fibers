@@ -1,32 +1,21 @@
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
+# Dependencies
+/vendor/
 
-# Build artifacts
-vendor/
-composer.lock
-composer.phar
+# IDE
+/.idea/
+/.vscode/
+.trae
+/.cursor
+
+# Build
+/bin/
 
 # Logs
-*.log
+/logs/
+/coverage/
+/.phpunit.cache/
+/.phpunit.result.cache
 
-# OS generated files
+# OS
 .DS_Store
 Thumbs.db
-
-# PHPUnit
-coverage/
-.phpunit.result.cache
-
-# CodeSniffer
-.php_cs.cache
-
-# IDE
-.trae/
-*/.cursor
-phpcs.xml.dist
-phpunit.xml.dist
-phpunit.xml
-phpcs.xml

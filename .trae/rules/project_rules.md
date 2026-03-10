@@ -1,5 +1,5 @@
-写一个字节团队的trae IDE识别的md文档以便模型生成：
-要开发一个 健壮全面的 Fiber 纤程客户端 的composer的包，命名 nova/fibers，需要封装开发时全面并便捷方法使用，命令方法尽量简洁好记，请帮忙补充完善，更健壮的架构代码实现：
+
+要开发一个 健壮全面的 Fiber 纤程客户端 的composer的包，命名 Kode/fibers，需要封装开发时全面并便捷方法使用，命令方法尽量简洁好记，请帮忙补充完善，更健壮的架构代码实现：
 1、php8.1+使用，php8.1 和 php8.4的区别：注意: 在 PHP 8.4.0 之前，不允许在对象析构方法执行期间切换纤程。判断php版本是否支持，不支持则自动降级处理。
 2、纤程池，一键纤程，其他类/方法可方便加入纤程，暂停，查看id，纤程间通信，队列，redis，MySQL，pgsql，HTTP，超时控制等操作（参考swow/swoole等协程框架使用）。如线程池设置为 CPU 核心数的 2-4 倍，增加获取CPU数量方法可在配置文件中使用。请帮忙补充完善。
 3、需要开发所有框架通用的包，主要偏向laravel、symfony等框架，但是也要适配yii3、thinkphp8或自建框架等。生成框架推送配置文件的方法，便于对应框架使用命令直接生成配置文件。如没有则使用自带的命令生成相关配置文件。
@@ -7,19 +7,31 @@
 5、README.md的详细使用方法。如线程池：什么情况下使用，如何使用；一键协程：是否尽量在不改变在运行的生产环境中的使用，如何使用等等，帮忙补充完成。
 6、如有禁用函数使用，增加检测环境方法，并在md文档中说明。
 
+1、使用 kode/console 改版 src/commands 相关的功能和引用。
+2、使用 kode/context 改版 src/context 相关的功能和引用。
+3、使用 kode/facade改版 src/facade相关的功能和引用。
+4、使用 kode/attributes 改版 src/attributes 、attribute 相关的功能和引用，现有这两个可否合并一个。
+5、看是否能用上  kode/aop 、kode/runtime、kode/http-client 。
+6、revolt/event-loop 包是实现他的功能，不是 引用他的包 。要更全面健壮的规划实现。
+7、其他相关功能的改进和完善，更健壮的规划代码。
+8、删除无用的文件、文件夹、方法，重复/无用的方法。
+9、同步最新或更改后重构最新的文档说明 ：examples和doc 的内容。
+10、无用的composer.json中包可命令卸载。
+11、写好相关的readme.md、example 示例代码 和 doc开发文档这种。
 
-以下是为 **`nova/fibers`** Composer 包设计的完整 `README.md` 文档，专为字节团队开发健壮、全面、IDE 可识别的 **Fiber 纤程客户端库** 而编写。该文档遵循现代 PHP 8.1+ 最佳实践，兼容 Laravel、Symfony、Yii3、ThinkPHP8 及自建框架，并支持 IDE 智能提示（通过 PHPDoc + 原生注解），包含自动配置生成、版本兼容性处理、池化管理、通信机制等核心功能。如使用 协变/逆变、反射等，可实现更安全、健壮性高、速度快 则直接使用。帮忙完善相关功能。
+
+以下是为 **`Kode/fibers`** Composer 包设计的完整 `README.md` 文档，专为字节团队开发健壮、全面、IDE 可识别的 **Fiber 纤程客户端库** 而编写。该文档遵循现代 PHP 8.1+ 最佳实践，兼容 Laravel、Symfony、Yii3、ThinkPHP8 及自建框架，并支持 IDE 智能提示（通过 PHPDoc + 原生注解），包含自动配置生成、版本兼容性处理、池化管理、通信机制等核心功能。如使用 协变/逆变、反射等，可实现更安全、健壮性高、速度快 则直接使用。帮忙完善相关功能。
 
 ---
 
-# 🚀 `nova/fibers` – 高性能 Fiber 线程池与协程调度器
+# 🚀 `Kode/fibers` – 高性能 Fiber 线程池与协程调度器
 
 > A robust, framework-agnostic Fiber (纤程) client for PHP 8.1+, inspired by Swoole/Swow but built on native PHP Fibers with graceful fallbacks.
 
-[![Latest Version](https://img.shields.io/packagist/v/nova/fibers.svg?style=flat-square)](https://packagist.org/packages/nova/fibers)
-[![License](https://img.shields.io/packagist/l/nova/fibers.svg?style=flat-square)](LICENSE)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/nova-php/fibers/tests.yml?branch=main)](https://github.com/nova-php/fibers/actions)
-[![Coverage](https://img.shields.io/codecov/c/github/nova-php/fibers?token=XXXXX)](https://codecov.io/gh/nova-php/fibers)
+[![Latest Version](https://img.shields.io/packagist/v/Kode/fibers.svg?style=flat-square)](https://packagist.org/packages/Kode/fibers)
+[![License](https://img.shields.io/packagist/l/Kode/fibers.svg?style=flat-square)](LICENSE)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/Kode-php/fibers/tests.yml?branch=main)](https://github.com/Kode-php/fibers/actions)
+[![Coverage](https://img.shields.io/codecov/c/github/Kode-php/fibers?token=XXXXX)](https://codecov.io/gh/Kode-php/fibers)
 
 ---
 
@@ -43,7 +55,7 @@
 ## 📦 安装
 
 ```bash
-composer require nova/fibers
+composer require Kode/fibers
 ```
 
 ### 框架快速集成（可选）
@@ -65,11 +77,11 @@ composer require nova/fibers
 本包采用 **“轻量内核 + 插件扩展”** 设计：
 
 ```php
-Nova\Fibers\Core\FiberPool       // 主纤程池
-Nova\Fibers\Channel\Channel      // 通信通道
-Nova\Fibers\Task\TaskRunner      // 任务执行器
-Nova\Fibers\Support\CpuInfo      // CPU 核心探测
-Nova\Fibers\Contracts\Runnable   // 可运行接口
+Kode\Fibers\Core\FiberPool       // 主纤程池
+Kode\Fibers\Channel\Channel      // 通信通道
+Kode\Fibers\Task\TaskRunner      // 任务执行器
+Kode\Fibers\Support\CpuInfo      // CPU 核心探测
+Kode\Fibers\Contracts\Runnable   // 可运行接口
 ```
 
 所有组件均实现 PSR 标准，支持 DI 容器注入。
@@ -81,7 +93,7 @@ Nova\Fibers\Contracts\Runnable   // 可运行接口
 ### 1. 基础使用：一键启动纤程任务
 
 ```php
-use Nova\Fibers\Facades\Fiber;
+use Kode\Fibers\Facades\Fiber;
 
 // 启动一个纤程并等待结果
 $result = Fiber::run(fn() => sleep(1) || 'Hello from Fiber!');
@@ -92,7 +104,7 @@ echo $result; // 输出: Hello from Fiber!
 ### 2. 使用纤程池（推荐生产环境）
 
 ```php
-use Nova\Fibers\FiberPool;
+use Kode\Fibers\FiberPool;
 
 $pool = new FiberPool([
     'size' => 64,                    // 默认: CPU * 4
@@ -150,7 +162,7 @@ return [
 #### 获取 CPU 数量（用于动态配置）
 
 ```php
-use Nova\Fibers\Support\CpuInfo;
+use Kode\Fibers\Support\CpuInfo;
 
 $cpuCount = CpuInfo::get(); // int
 $defaultPoolSize = $cpuCount * 4; // 推荐设置为 CPU 核心数的 2–4 倍
@@ -269,7 +281,7 @@ class Fiber {}
 #### 创建通信通道（类似 Go Channel）
 
 ```php
-use Nova\Fibers\Channel\Channel;
+use Kode\Fibers\Channel\Channel;
 
 $ch = Channel::make('download-results', 10); // 缓冲区大小10
 
@@ -291,7 +303,7 @@ while ($msg = $ch->pop(1)) { // 超时1秒
 #### 发布/订阅模型（EventBus）
 
 ```php
-use Nova\Fibers\Event\EventBus;
+use Kode\Fibers\Event\EventBus;
 
 EventBus::on('payment.success', fn($ev) => notifyAdmin($ev->data));
 EventBus::fire(new PaymentSuccessEvent(['uid' => 123]));
@@ -304,7 +316,7 @@ EventBus::fire(new PaymentSuccessEvent(['uid' => 123]));
 #### 检测黑名单函数
 
 ```php
-use Nova\Fibers\Support\Environment;
+use Kode\Fibers\Support\Environment;
 
 $issues = Environment::diagnose();
 
@@ -409,7 +421,7 @@ php vendor/bin/fibers benchmark --concurrency=1000
 
 ## 📄 许可证
 
-MIT License. See [LICENSE](./LICENSE) for full text.
+Apache 2.0 License. See [LICENSE](./LICENSE) for full text.
 
 ---
 
@@ -422,8 +434,8 @@ MIT License. See [LICENSE](./LICENSE) for full text.
 
 ---
 
-> Maintained by **Byte Team - Nova PHP Lab**  
-> 🌐 https://github.com/nova-php/fibers
+> Maintained by **Byte Team - Kode PHP Lab**  
+> 🌐 https://github.com/Kode-php/fibers
 
 ---
 
@@ -443,7 +455,7 @@ MIT License. See [LICENSE](./LICENSE) for full text.
 
 📌 **下一步建议：**
 
-1. 创建 GitHub 仓库 `nova-php/fibers`
+1. 创建 GitHub 仓库 `Kode-php/fibers`
 2. 初始化项目结构（`src/`, `tests/`, `config/`, `bin/`）
 3. 实现 `FiberPool`, `Channel`, `Environment` 核心类
 4. 添加 PHPUnit 测试套件

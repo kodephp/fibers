@@ -1,52 +1,38 @@
 <?php
+declare(strict_types=1);
 
-namespace Nova\Fibers\Facades;
-
-use Nova\Fibers\FiberManager;
+namespace Kode\Fibers\Facades;
 
 /**
- * Fiber - 纤程门面类
- * 
- * 提供便捷的静态方法访问纤程功能
- * 
+ * Fiber 门面类 - 提供对Fiber相关功能的静态访问
+ *
  * @method static mixed run(callable $task, float $timeout = null)
- * @method static \Nova\Fibers\Core\FiberPool pool(array $options = [])
- * @method static \Nova\Fibers\Channel\Channel channel(string $name, int $buffer = 0)
+ * @method static \Kode\Fibers\Core\FiberPool pool(array $options = [])
+ * @method static \Kode\Fibers\Channel\Channel channel(string $name, int $buffer = 0)
+ * @method static int cpuCount()
+ * @method static array concurrent(array $tasks, float $timeout = null)
+ * @method static mixed retry(callable $task, int $maxRetries = 3, float $retryDelay = 0.5)
+ * @method static void sleep(float $seconds)
+ * @method static mixed withTimeout(callable $task, float $timeout)
+ * @method static void waitAll(array $tasks)
+ * @method static mixed parallel(array $tasks, callable $callback = null)
+ * @method static void setAppContext(array $context)
+ * @method static array getAppContext()
+ * @method static mixed getAppContextValue(string $key, mixed $default = null)
+ * @method static void setAppContextValue(string $key, mixed $value)
+ * @method static array diagnose()
+ * @method static void enableSafeDestructMode()
+ * @method static void deferDestructTask(callable $task)
  */
-class Fiber
+class Fiber extends Facade
 {
     /**
-     * 运行一个纤程任务
+     * 获取组件的注册名称
      *
-     * @param callable $task 任务回调
-     * @param float|null $timeout 超时时间（秒）
-     * @return mixed 任务返回值
+     * @return string
      */
-    public static function run(callable $task, ?float $timeout = null)
+    protected static function getFacadeAccessor(): string
     {
-        return FiberManager::run($task, $timeout);
-    }
-
-    /**
-     * 获取纤程池实例
-     *
-     * @param array $options 池配置选项
-     * @return \Nova\Fibers\Core\FiberPool 纤程池实例
-     */
-    public static function pool(array $options = [])
-    {
-        return FiberManager::pool($options);
-    }
-
-    /**
-     * 创建或获取通道实例
-     *
-     * @param string $name 通道名称
-     * @param int $buffer 缓冲区大小
-     * @return \Nova\Fibers\Channel\Channel 通道实例
-     */
-    public static function channel(string $name, int $buffer = 0)
-    {
-        return FiberManager::channel($name, $buffer);
+        return 'fiber';
     }
 }

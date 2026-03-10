@@ -2,29 +2,19 @@
 
 declare(strict_types=1);
 
-namespace Nova\Fibers\Attributes;
+namespace Kode\Fibers\Attributes;
 
 use Attribute;
+use Kode\Attributes\FiberSafe as BaseFiberSafe;
 
 /**
- * 标记方法可在纤程中安全调用的属性
- * 
- * 该属性用于标记那些可以在纤程环境中安全执行的方法，
- * 通常这些方法不会执行阻塞操作或已经适配了非阻塞实现。
- * 
- * @Annotation
- * @Target({"METHOD"})
+ * FiberSafe attribute to mark methods that can be safely called in a fiber context
+ *
+ * This attribute indicates that a method is safe to be called within a fiber
+ * and has been tested to handle fiber suspension and resumption correctly.
  */
-#[Attribute(Attribute::TARGET_METHOD)]
-class FiberSafe
+#[Attribute(Attribute::TARGET_METHOD | Attribute::TARGET_CLASS)]
+class FiberSafe extends BaseFiberSafe
 {
-    /**
-     * 构造函数
-     * 
-     * @param string|null $description 描述信息
-     */
-    public function __construct(
-        public readonly ?string $description = null
-    ) {
-    }
+    // 使用Kode\Attributes包提供的完整功能
 }

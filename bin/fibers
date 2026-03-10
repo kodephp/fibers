@@ -1,20 +1,29 @@
 #!/usr/bin/env php
 <?php
 
-// 检查是否安装了Composer自动加载器
-if (file_exists(__DIR__ . '/../vendor/autoload.php')) {
-    require __DIR__ . '/../vendor/autoload.php';
-} elseif (file_exists(__DIR__ . '/../../../autoload.php')) {
-    // 如果作为依赖项安装，尝试从项目根目录加载
+declare(strict_types=1);
+
+// 检查是否通过Composer安装
+if (file_exists(__DIR__ . '/../../../autoload.php')) {
     require __DIR__ . '/../../../autoload.php';
+} elseif (file_exists(__DIR__ . '/../vendor/autoload.php')) {
+    require __DIR__ . '/../vendor/autoload.php';
 } else {
-    echo "Error: Composer autoload file not found.\n";
-    echo "Please run 'composer install' first.\n";
+    echo "Error: Could not find autoload.php\n";
     exit(1);
 }
 
-use Nova\Fibers\Console\Application;
+use Kode\Fibers\Commands\FibersCommand;
+use Kode\Console\Input;
+use Kode\Console\Output;
 
-// 创建并运行控制台应用
-$app = new Application();
-$app->run();
+// 创建并运行命令
+try {
+    $command = new FibersCommand();
+    $input = new Input($argv);
+    $output = new Output();
+    exit($command->fire($input, $output));
+} catch (Exception $e) {
+    echo "Error: " . $e->getMessage() . "\n";
+    exit(1);
+}

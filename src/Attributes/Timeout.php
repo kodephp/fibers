@@ -2,28 +2,20 @@
 
 declare(strict_types=1);
 
-namespace Nova\Fibers\Attributes;
+namespace Kode\Fibers\Attributes;
 
 use Attribute;
+use Kode\Attributes\Timeout as BaseTimeout;
 
 /**
- * 超时设置属性
- * 
- * 用于标记方法的执行超时时间，单位为秒。
- * 
- * @Annotation
- * @Target({"METHOD"})
+ * Timeout attribute to set execution timeout for fiber methods
+ *
+ * This attribute specifies a timeout for method execution when running
+ * in a fiber context. If the method exceeds the specified timeout,
+ * a TimeoutException will be thrown.
  */
 #[Attribute(Attribute::TARGET_METHOD)]
-class Timeout
+class Timeout extends BaseTimeout
 {
-    /**
-     * 构造函数
-     * 
-     * @param int $seconds 超时时间（秒）
-     */
-    public function __construct(
-        public readonly int $seconds
-    ) {
-    }
+    // 使用Kode\Attributes包提供的完整功能
 }
