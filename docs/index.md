@@ -7,11 +7,15 @@
 1. [安装与版本](installation.md)
 2. [快速开始](quick-start.md)
 3. [架构设计](architecture.md)
-4. [容错与调度](resilience.md)
-5. [分布式任务分配](distributed-scheduler.md)
-6. [API 参考](api-reference.md)
-7. [路线图](roadmap.md)
-8. [示例总览](examples.md)
+4. [上下文传递机制](context-propagation.md)
+5. [容错与调度](resilience.md)
+6. [分布式任务分配](distributed-scheduler.md)
+7. [运行时桥接](runtime-bridge.md)
+8. [Profiler 面板](profiler-dashboard.md)
+9. [ORM 适配层](orm-adapters.md)
+10. [API 参考](api-reference.md)
+11. [路线图](roadmap.md)
+12. [示例总览](examples.md)
 
 ## 文档约定
 

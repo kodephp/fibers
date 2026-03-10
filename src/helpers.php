@@ -161,3 +161,38 @@ if (!function_exists('fiber_resilient_run')) {
         return Fibers::resilientRun($task, $options);
     }
 }
+
+if (!function_exists('fiber_concurrent_with_context')) {
+    function fiber_concurrent_with_context(array $context, array $tasks, ?float $timeout = null): array
+    {
+        return Fibers::concurrentWithContext($context, $tasks, $timeout);
+    }
+}
+
+if (!function_exists('fiber_schedule_distributed_remote')) {
+    function fiber_schedule_distributed_remote(array $tasks, array $nodes = [], $transport = null): array
+    {
+        return Fibers::scheduleDistributedRemote($tasks, $nodes, $transport);
+    }
+}
+
+if (!function_exists('fiber_runtime_bridge_info')) {
+    function fiber_runtime_bridge_info(): array
+    {
+        return Fibers::runtimeBridgeInfo();
+    }
+}
+
+if (!function_exists('fiber_run_on_bridge')) {
+    function fiber_run_on_bridge(callable $task, ?string $preferred = null)
+    {
+        return Fibers::runOnBridge($task, $preferred);
+    }
+}
+
+if (!function_exists('fiber_profile')) {
+    function fiber_profile(callable $task, string $name = 'task'): array
+    {
+        return Fibers::profile($task, $name);
+    }
+}

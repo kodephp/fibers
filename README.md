@@ -63,6 +63,22 @@ $batch = Fibers::batch([1, 2, 3], fn(int $item) => $item * 2, 2);
 $features = Fibers::runtimeFeatures();
 ```
 
+### 新增健壮架构 API
+
+- 上下文并发透传：`Fibers::concurrentWithContext()`
+- 健壮单任务：`Fibers::resilientRun()`
+- 远程调度分发：`Fibers::scheduleDistributedRemote()`
+- 运行时桥接：`Fibers::runtimeBridgeInfo()`、`Fibers::runOnBridge()`
+- 可视化监控：`Fibers::profile()`、`Fibers::profilerDashboard()`
+- ORM 适配层：`Fibers::eloquent()`、`Fibers::fixtures()`
+
+对应文档：
+
+- [上下文传递机制](docs/context-propagation.md)
+- [运行时桥接](docs/runtime-bridge.md)
+- [Profiler 可视化面板](docs/profiler-dashboard.md)
+- [ORM 适配层](docs/orm-adapters.md)
+
 ---
 
 ## 📦 安装

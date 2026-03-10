@@ -401,11 +401,11 @@ php vendor/bin/fibers benchmark --concurrency=1000
 
 ## 🧩 扩展建议（未来路线图）
 
-- [ ] Fiber 上下文变量传递（类似 Context）
-- [ ] 分布式 Fiber 调度（跨机器）
-- [ ] Fiber Profiler 可视化面板
-- [ ] 与 Swoole/OpenSwoole/Swow/Workerman 无缝桥接
-- [ ] Fiber-aware ORM（Eloquent/Fixtures）
+- [x] Fiber 上下文变量传递（类似 Context）
+- [x] 分布式 Fiber 调度（跨机器）
+- [x] Fiber Profiler 可视化面板
+- [x] 与 Swoole/OpenSwoole/Swow/Workerman 无缝桥接
+- [x] Fiber-aware ORM（Eloquent/Fixtures）
 
 ---
 

@@ -8,6 +8,7 @@
 - `go(callable $task, ?float $timeout = null): mixed`
 - `resilientRun(callable $task, array $options = []): mixed`
 - `withContext(array $context, callable $task, ?float $timeout = null): mixed`
+- `concurrentWithContext(array $context, array $tasks, ?float $timeout = null): array`
 - `withTimeout(callable $task, float $timeout): mixed`
 
 ### 并发与批处理
@@ -28,6 +29,13 @@
 
 - `scheduleDistributed(array $tasks, array $nodes = []): array`
 - `scheduleDistributedAdvanced(array $tasks, array $nodes = [], array $options = []): array`
+- `scheduleDistributedRemote(array $tasks, array $nodes = [], ?NodeTransportInterface $transport = null): array`
+- `runtimeBridgeInfo(): array`
+- `runOnBridge(callable $task, ?string $preferred = null): mixed`
+- `profile(callable $task, string $name = 'task'): array`
+- `profilerDashboard(array $records): string`
+- `eloquent(object $connection): EloquentAdapter`
+- `fixtures(array $fixtures = []): FixturesAdapter`
 
 ## helper 函数
 
@@ -36,8 +44,13 @@
 - `fiber_batch()`
 - `fiber_resilient_batch()`
 - `fiber_resilient_run()`
+- `fiber_concurrent_with_context()`
 - `fiber_schedule_distributed()`
 - `fiber_schedule_distributed_advanced()`
+- `fiber_schedule_distributed_remote()`
+- `fiber_runtime_bridge_info()`
+- `fiber_run_on_bridge()`
+- `fiber_profile()`
 - `fiber_runtime_features()`
 - `fiber_roadmap()`
 

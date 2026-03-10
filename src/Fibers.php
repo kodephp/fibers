@@ -10,9 +10,16 @@ use Kode\Fibers\Context\Context;
 use Kode\Fibers\Core\CircuitBreaker;
 use Kode\Fibers\Core\RoundRobinBalancer;
 use Kode\Fibers\Core\DistributedScheduler;
+use Kode\Fibers\Core\InMemoryNodeTransport;
+use Kode\Fibers\Contracts\NodeTransportInterface;
+use Kode\Fibers\Profiler\FiberProfiler;
+use Kode\Fibers\Profiler\ProfilerDashboard;
+use Kode\Fibers\ORM\EloquentAdapter;
+use Kode\Fibers\ORM\FixturesAdapter;
 use Kode\Fibers\Support\Environment;
 use Kode\Fibers\Support\CpuInfo;
 use Kode\Fibers\Support\Roadmap;
+use Kode\Fibers\Support\RuntimeBridge;
 use Kode\Fibers\Exceptions\FiberException;
 use Kode\Fibers\Task\TaskRunner;
 use Kode\Fibers\Task\Task;
@@ -29,11 +36,19 @@ use Kode\Fibers\Task\Task;
  * @method static mixed withTimeout(callable $task, float $timeout)
  * @method static mixed go(callable $task, float $timeout = null)
  * @method static mixed withContext(array $context, callable $task, float $timeout = null)
+ * @method static array concurrentWithContext(array $context, array $tasks, float $timeout = null)
  * @method static array batch(array $items, callable $handler, int $concurrency = null, float $timeout = null)
  * @method static array resilientBatch(array $items, callable $handler, array $options = [])
  * @method static mixed resilientRun(callable $task, array $options = [])
  * @method static array scheduleDistributed(array $tasks, array $nodes = [])
  * @method static array scheduleDistributedAdvanced(array $tasks, array $nodes = [], array $options = [])
+ * @method static array scheduleDistributedRemote(array $tasks, array $nodes = [], ?NodeTransportInterface $transport = null)
+ * @method static array runtimeBridgeInfo()
+ * @method static mixed runOnBridge(callable $task, string $preferred = null)
+ * @method static array profile(callable $task, string $name = 'task')
+ * @method static string profilerDashboard(array $records)
+ * @method static EloquentAdapter eloquent(object $connection)
+ * @method static FixturesAdapter fixtures(array $fixtures = [])
  * @method static void waitAll(array $tasks)
  * @method static mixed parallel(array $tasks, callable $callback = null)
  * @method static array runtimeFeatures()
@@ -277,17 +292,26 @@ class Fibers
 
     public static function withContext(array $context, callable $task, ?float $timeout = null): mixed
     {
-        return static::run(function () use ($context, $task) {
-            $previousContext = Context::export();
-            Context::setMultiple($context);
+        return static::run(fn() => Context::runWith($context, $task), $timeout);
+    }
 
-            try {
-                return $task();
-            } finally {
-                Context::clear();
-                Context::import($previousContext);
-            }
-        }, $timeout);
+    public static function concurrentWithContext(array $context, array $tasks, ?float $timeout = null): array
+    {
+        $snapshot = Context::fork($context);
+        $wrapped = [];
+        foreach ($tasks as $key => $task) {
+            $wrapped[$key] = function () use ($task, $snapshot) {
+                return Context::runWith($snapshot, function () use ($task) {
+                    if ($task instanceof \Closure || is_callable($task)) {
+                        return $task();
+                    }
+
+                    return $task;
+                });
+            };
+        }
+
+        return static::concurrent($wrapped, $timeout);
     }
 
     public static function batch(array $items, callable $handler, ?int $concurrency = null, ?float $timeout = null): array
@@ -432,6 +456,25 @@ class Fibers
         return $scheduler->dispatch($tasks);
     }
 
+    public static function scheduleDistributedRemote(
+        array $tasks,
+        array $nodes = [],
+        ?NodeTransportInterface $transport = null
+    ): array {
+        $transport = $transport ?? new InMemoryNodeTransport();
+        $distributed = static::scheduleDistributedAdvanced($tasks, $nodes);
+        $receipts = [];
+
+        foreach ($distributed['assignments'] as $nodeId => $nodeTasks) {
+            $receipts[$nodeId] = $transport->send((string) $nodeId, $nodeTasks);
+        }
+
+        return [
+            'dispatch' => $distributed,
+            'receipts' => $receipts,
+        ];
+    }
+
     public static function resilientRun(callable $task, array $options = []): mixed
     {
         $config = array_merge([
@@ -470,6 +513,42 @@ class Fibers
         }
 
         throw new FiberException('Resilient run failed: ' . $lastError?->getMessage(), (int) ($lastError?->getCode() ?? 0), $lastError);
+    }
+
+    public static function runtimeBridgeInfo(): array
+    {
+        return RuntimeBridge::detect();
+    }
+
+    public static function runOnBridge(callable $task, ?string $preferred = null): mixed
+    {
+        return RuntimeBridge::run($task, $preferred);
+    }
+
+    public static function profile(callable $task, string $name = 'task'): array
+    {
+        $profiler = new FiberProfiler();
+        $result = $profiler->profile($name, $task);
+
+        return [
+            'result' => $result,
+            'records' => $profiler->records(),
+        ];
+    }
+
+    public static function profilerDashboard(array $records): string
+    {
+        return ProfilerDashboard::renderHtml($records);
+    }
+
+    public static function eloquent(object $connection): EloquentAdapter
+    {
+        return new EloquentAdapter($connection);
+    }
+
+    public static function fixtures(array $fixtures = []): FixturesAdapter
+    {
+        return new FixturesAdapter($fixtures);
     }
 
     /**

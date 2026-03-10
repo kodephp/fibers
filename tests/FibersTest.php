@@ -150,4 +150,41 @@ class FibersTest extends TestCase
         $this->assertArrayHasKey('node-a', $response['assignments']);
         $this->assertArrayHasKey('task-3', $response['unassigned']);
     }
+
+    public function testConcurrentWithContext(): void
+    {
+        $results = Fibers::concurrentWithContext(
+            ['trace_id' => 'trace-ctx-1'],
+            [
+                static fn() => \Kode\Fibers\Context\Context::get('trace_id'),
+                static fn() => \Kode\Fibers\Context\Context::get('trace_id'),
+            ]
+        );
+
+        $this->assertSame('trace-ctx-1', $results[0]);
+        $this->assertSame('trace-ctx-1', $results[1]);
+    }
+
+    public function testScheduleDistributedRemote(): void
+    {
+        $result = Fibers::scheduleDistributedRemote(
+            ['job-1' => ['required_tags' => ['cpu']]],
+            ['node-a' => ['healthy' => true, 'tags' => ['cpu']]]
+        );
+
+        $this->assertArrayHasKey('dispatch', $result);
+        $this->assertArrayHasKey('receipts', $result);
+        $this->assertArrayHasKey('node-a', $result['receipts']);
+    }
+
+    public function testProfileAndDashboard(): void
+    {
+        $profile = Fibers::profile(static fn() => 'ok', 'demo');
+        $this->assertSame('ok', $profile['result']);
+        $this->assertNotEmpty($profile['records']);
+
+        $html = Fibers::profilerDashboard($profile['records']);
+        $this->assertStringContainsString('Fiber Profiler Dashboard', $html);
+        $this->assertStringContainsString('demo', $html);
+    }
 }

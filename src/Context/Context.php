@@ -191,4 +191,32 @@ class Context
     {
         static::setMultiple($data);
     }
+
+    public static function snapshot(): array
+    {
+        return static::export();
+    }
+
+    public static function restore(array $snapshot): void
+    {
+        static::clear();
+        static::import($snapshot);
+    }
+
+    public static function runWith(array $context, callable $task): mixed
+    {
+        $snapshot = static::snapshot();
+        static::setMultiple($context);
+
+        try {
+            return $task();
+        } finally {
+            static::restore($snapshot);
+        }
+    }
+
+    public static function fork(array $extra = []): array
+    {
+        return array_merge(static::snapshot(), $extra);
+    }
 }
