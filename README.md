@@ -30,6 +30,39 @@
 `kode/fibers` 旨在为 Laravel、Symfony、Yii3、ThinkPHP8 及自建框架提供统一的纤程运行时能力，减少业务接入并发模型时的改造成本。  
 项目重点解决三类问题：PHP 版本差异（尤其是 PHP<8.4 的析构限制）、生产场景下的并发治理（池化、超时、重试、通信）、以及跨框架可移植性（统一配置与 CLI 初始化）。
 
+## 🗺️ 未来路线图
+
+- 上下文传递机制：增强纤程上下文跨任务传播能力
+- 分布式 Fiber 调度：支持跨机器调度与故障转移
+- 性能监控面板：Profiler 可视化监控能力
+- 生态系统集成：Swoole / OpenSwoole / Swow / Workerman 桥接
+- ORM 适配层：Fiber-aware Eloquent / Doctrine 适配
+- 断路器模式：自动熔断、半开恢复与保护策略
+- 负载均衡：智能任务分发与动态并发控制
+- 热重载支持：不中断服务更新代码
+- 可视化管理界面：Web UI 管理池、队列、任务
+- 更多框架支持：持续扩展框架接入
+
+详细阶段计划见 [路线图文档](docs/roadmap.md)。
+
+## ⚙️ PHP 8.5 兼容与便捷 API
+
+新增便捷入口以降低接入成本并兼容未来 PHP 8.5 运行时能力：
+
+```php
+use Kode\Fibers\Fibers;
+
+$result = Fibers::go(fn() => 'hello');
+
+$ctxResult = Fibers::withContext(
+    ['trace_id' => 'trace-001'],
+    fn() => \Kode\Fibers\Context\Context::get('trace_id')
+);
+
+$batch = Fibers::batch([1, 2, 3], fn(int $item) => $item * 2, 2);
+$features = Fibers::runtimeFeatures();
+```
+
 ---
 
 ## 📦 安装

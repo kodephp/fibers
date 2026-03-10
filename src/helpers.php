@@ -98,3 +98,38 @@ if (!function_exists('fiber_cpu_count')) {
         return Fibers::cpuCount();
     }
 }
+
+if (!function_exists('fiber_go')) {
+    function fiber_go(callable $task, ?float $timeout = null)
+    {
+        return Fibers::go($task, $timeout);
+    }
+}
+
+if (!function_exists('fiber_with_context')) {
+    function fiber_with_context(array $context, callable $task, ?float $timeout = null)
+    {
+        return Fibers::withContext($context, $task, $timeout);
+    }
+}
+
+if (!function_exists('fiber_batch')) {
+    function fiber_batch(array $items, callable $handler, ?int $concurrency = null, ?float $timeout = null): array
+    {
+        return Fibers::batch($items, $handler, $concurrency, $timeout);
+    }
+}
+
+if (!function_exists('fiber_runtime_features')) {
+    function fiber_runtime_features(): array
+    {
+        return Fibers::runtimeFeatures();
+    }
+}
+
+if (!function_exists('fiber_roadmap')) {
+    function fiber_roadmap(): array
+    {
+        return Fibers::roadmap();
+    }
+}

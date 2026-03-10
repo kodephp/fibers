@@ -14,8 +14,13 @@ namespace Kode\Fibers\Facades;
  * @method static mixed retry(callable $task, int $maxRetries = 3, float $retryDelay = 0.5)
  * @method static void sleep(float $seconds)
  * @method static mixed withTimeout(callable $task, float $timeout)
+ * @method static mixed go(callable $task, float $timeout = null)
+ * @method static mixed withContext(array $context, callable $task, float $timeout = null)
+ * @method static array batch(array $items, callable $handler, int $concurrency = null, float $timeout = null)
  * @method static void waitAll(array $tasks)
  * @method static mixed parallel(array $tasks, callable $callback = null)
+ * @method static array runtimeFeatures()
+ * @method static array roadmap()
  * @method static void setAppContext(array $context)
  * @method static array getAppContext()
  * @method static mixed getAppContextValue(string $key, mixed $default = null)
@@ -31,7 +36,7 @@ class Fiber extends Facade
      *
      * @return string
      */
-    protected static function getFacadeAccessor(): string
+    protected static function id(): string
     {
         return 'fiber';
     }

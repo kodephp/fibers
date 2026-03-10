@@ -6,8 +6,10 @@ namespace Kode\Fibers;
 
 use Kode\Fibers\Core\FiberPool;
 use Kode\Fibers\Channel\Channel;
+use Kode\Fibers\Context\Context;
 use Kode\Fibers\Support\Environment;
 use Kode\Fibers\Support\CpuInfo;
+use Kode\Fibers\Support\Roadmap;
 use Kode\Fibers\Exceptions\FiberException;
 use Kode\Fibers\Task\TaskRunner;
 use Kode\Fibers\Task\Task;
@@ -22,8 +24,13 @@ use Kode\Fibers\Task\Task;
  * @method static mixed retry(callable $task, int $maxRetries = 3, float $retryDelay = 0.5)
  * @method static void sleep(float $seconds)
  * @method static mixed withTimeout(callable $task, float $timeout)
+ * @method static mixed go(callable $task, float $timeout = null)
+ * @method static mixed withContext(array $context, callable $task, float $timeout = null)
+ * @method static array batch(array $items, callable $handler, int $concurrency = null, float $timeout = null)
  * @method static void waitAll(array $tasks)
  * @method static mixed parallel(array $tasks, callable $callback = null)
+ * @method static array runtimeFeatures()
+ * @method static array roadmap()
  * @method static void setAppContext(array $context)
  * @method static array getAppContext()
  * @method static mixed getAppContextValue(string $key, mixed $default = null)
@@ -256,6 +263,54 @@ class Fibers
         return static::run($task, $timeout);
     }
 
+    public static function go(callable $task, ?float $timeout = null): mixed
+    {
+        return static::run($task, $timeout);
+    }
+
+    public static function withContext(array $context, callable $task, ?float $timeout = null): mixed
+    {
+        return static::run(function () use ($context, $task) {
+            $previousContext = Context::export();
+            Context::setMultiple($context);
+
+            try {
+                return $task();
+            } finally {
+                Context::clear();
+                Context::import($previousContext);
+            }
+        }, $timeout);
+    }
+
+    public static function batch(array $items, callable $handler, ?int $concurrency = null, ?float $timeout = null): array
+    {
+        $maxConcurrency = max(1, CpuInfo::get() * 2);
+        $concurrency = max(1, min($concurrency ?? $maxConcurrency, count($items) > 0 ? count($items) : 1));
+        $results = [];
+
+        foreach (array_chunk($items, $concurrency, true) as $chunk) {
+            $tasks = [];
+            foreach ($chunk as $key => $item) {
+                $tasks[$key] = fn() => $handler($item, $key);
+            }
+
+            $chunkResults = static::concurrent($tasks, $timeout);
+            foreach ($chunkResults as $key => $value) {
+                if ($value instanceof \Throwable) {
+                    throw new FiberException(
+                        sprintf('Batch task failed at key [%s]: %s', (string) $key, $value->getMessage()),
+                        (int) $value->getCode(),
+                        $value
+                    );
+                }
+                $results[$key] = $value;
+            }
+        }
+
+        return $results;
+    }
+
     /**
      * 等待所有任务完成
      *
@@ -339,6 +394,22 @@ class Fibers
     public static function diagnose(): array
     {
         return Environment::diagnose();
+    }
+
+    public static function runtimeFeatures(): array
+    {
+        return [
+            'php_version' => PHP_VERSION,
+            'php_version_id' => PHP_VERSION_ID,
+            'native_fiber' => class_exists(\Fiber::class),
+            'safe_destruct_supported' => PHP_VERSION_ID >= 80400,
+            'php85_or_newer' => PHP_VERSION_ID >= 80500,
+        ];
+    }
+
+    public static function roadmap(): array
+    {
+        return Roadmap::items();
     }
 
     /**
