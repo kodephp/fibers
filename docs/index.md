@@ -1,25 +1,20 @@
-# Kode/Fibers Documentation
+# Kode/Fibers 开发文档
 
-Welcome to the Kode/Fibers documentation. This guide will help you understand how to use the Kode/Fibers library effectively.
+本文档面向开发者与维护者，内容与当前代码实现保持一致，示例均可直接运行。
 
-## Table of Contents
+## 文档导航
 
-1. [Installation](installation.md)
-2. [Quick Start](quick-start.md)
-3. [Core Concepts](core-concepts.md)
-4. [Fiber Pools](fiber-pools.md)
-5. [Channels](channels.md)
-6. [Framework Integration](framework-integration.md)
-7. [Advanced Usage](advanced-usage.md)
-8. [Task Management](task-management.md)
-9. [Environment Checks](environment-checks.md)
-10. [API Reference](api-reference.md)
-11. [Roadmap](roadmap.md)
+1. [安装与版本](installation.md)
+2. [快速开始](quick-start.md)
+3. [架构设计](architecture.md)
+4. [容错与调度](resilience.md)
+5. [分布式任务分配](distributed-scheduler.md)
+6. [API 参考](api-reference.md)
+7. [路线图](roadmap.md)
+8. [示例总览](examples.md)
 
-## Getting Started
+## 文档约定
 
-To get started with Kode/Fibers, check out our [Quick Start Guide](quick-start.md) which will walk you through the basics of using fibers in your PHP applications.
-
-## Support
-
-If you need help or have questions, please [open an issue](https://github.com/Kode-php/fibers/issues) on GitHub.
+- 所有示例默认在 PHP 8.1+ 下运行。
+- 若示例使用到并发执行，建议在 CLI 环境运行。
+- 若 API 返回数组结构，文档给出关键字段说明与最小示例。

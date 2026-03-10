@@ -133,3 +133,31 @@ if (!function_exists('fiber_roadmap')) {
         return Fibers::roadmap();
     }
 }
+
+if (!function_exists('fiber_resilient_batch')) {
+    function fiber_resilient_batch(array $items, callable $handler, array $options = []): array
+    {
+        return Fibers::resilientBatch($items, $handler, $options);
+    }
+}
+
+if (!function_exists('fiber_schedule_distributed')) {
+    function fiber_schedule_distributed(array $tasks, array $nodes = []): array
+    {
+        return Fibers::scheduleDistributed($tasks, $nodes);
+    }
+}
+
+if (!function_exists('fiber_schedule_distributed_advanced')) {
+    function fiber_schedule_distributed_advanced(array $tasks, array $nodes = [], array $options = []): array
+    {
+        return Fibers::scheduleDistributedAdvanced($tasks, $nodes, $options);
+    }
+}
+
+if (!function_exists('fiber_resilient_run')) {
+    function fiber_resilient_run(callable $task, array $options = [])
+    {
+        return Fibers::resilientRun($task, $options);
+    }
+}

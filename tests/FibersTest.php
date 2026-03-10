@@ -72,4 +72,82 @@ class FibersTest extends TestCase
         $this->assertContains('distributed_scheduler', $keys);
         $this->assertContains('orm_adapter', $keys);
     }
+
+    public function testResilientBatch(): void
+    {
+        $response = Fibers::resilientBatch(
+            ['a' => 1, 'b' => 2, 'c' => 3],
+            static function (int $item, string $key): string {
+                if ($key === 'b') {
+                    throw new \RuntimeException('b failed');
+                }
+
+                return $key . ':' . ($item * 10);
+            },
+            [
+                'concurrency' => 2,
+                'max_retries' => 0,
+                'fail_fast' => false,
+                'failure_threshold' => 2,
+            ]
+        );
+
+        $this->assertSame('a:10', $response['results']['a']);
+        $this->assertArrayHasKey('b', $response['errors']);
+        $this->assertSame(3, $response['metrics']['total']);
+    }
+
+    public function testDistributedScheduleApi(): void
+    {
+        $response = Fibers::scheduleDistributed(
+            ['t1' => ['name' => 'alpha'], 't2' => ['name' => 'beta'], 't3' => ['name' => 'gamma']],
+            ['node-a' => ['healthy' => true], 'node-b' => ['healthy' => true]]
+        );
+
+        $this->assertArrayHasKey('assignments', $response);
+        $this->assertArrayHasKey('unassigned', $response);
+        $this->assertEmpty($response['unassigned']);
+        $this->assertNotEmpty($response['assignments']);
+    }
+
+    public function testResilientRunWithFallback(): void
+    {
+        $result = Fibers::resilientRun(
+            static function () {
+                throw new \RuntimeException('always failed');
+            },
+            [
+                'max_retries' => 0,
+                'failure_threshold' => 1,
+                'fallback' => static fn() => 'fallback-ok',
+            ]
+        );
+
+        $this->assertSame('fallback-ok', $result);
+    }
+
+    public function testScheduleDistributedAdvancedWithTagAndHealth(): void
+    {
+        $tasks = [
+            'task-1' => ['required_tags' => ['gpu']],
+            'task-2' => ['required_tags' => ['cpu']],
+            'task-3' => ['required_tags' => ['memory']],
+        ];
+
+        $nodes = [
+            'node-a' => ['healthy' => true, 'tags' => ['gpu', 'cpu']],
+            'node-b' => ['healthy' => true, 'tags' => ['cpu']],
+        ];
+
+        $response = Fibers::scheduleDistributedAdvanced(
+            $tasks,
+            $nodes,
+            ['unhealthy_nodes' => ['node-b']]
+        );
+
+        $this->assertArrayHasKey('assignments', $response);
+        $this->assertArrayHasKey('unassigned', $response);
+        $this->assertArrayHasKey('node-a', $response['assignments']);
+        $this->assertArrayHasKey('task-3', $response['unassigned']);
+    }
 }

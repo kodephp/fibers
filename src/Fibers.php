@@ -7,6 +7,9 @@ namespace Kode\Fibers;
 use Kode\Fibers\Core\FiberPool;
 use Kode\Fibers\Channel\Channel;
 use Kode\Fibers\Context\Context;
+use Kode\Fibers\Core\CircuitBreaker;
+use Kode\Fibers\Core\RoundRobinBalancer;
+use Kode\Fibers\Core\DistributedScheduler;
 use Kode\Fibers\Support\Environment;
 use Kode\Fibers\Support\CpuInfo;
 use Kode\Fibers\Support\Roadmap;
@@ -27,6 +30,10 @@ use Kode\Fibers\Task\Task;
  * @method static mixed go(callable $task, float $timeout = null)
  * @method static mixed withContext(array $context, callable $task, float $timeout = null)
  * @method static array batch(array $items, callable $handler, int $concurrency = null, float $timeout = null)
+ * @method static array resilientBatch(array $items, callable $handler, array $options = [])
+ * @method static mixed resilientRun(callable $task, array $options = [])
+ * @method static array scheduleDistributed(array $tasks, array $nodes = [])
+ * @method static array scheduleDistributedAdvanced(array $tasks, array $nodes = [], array $options = [])
  * @method static void waitAll(array $tasks)
  * @method static mixed parallel(array $tasks, callable $callback = null)
  * @method static array runtimeFeatures()
@@ -309,6 +316,160 @@ class Fibers
         }
 
         return $results;
+    }
+
+    public static function resilientBatch(array $items, callable $handler, array $options = []): array
+    {
+        $config = array_merge([
+            'concurrency' => max(1, CpuInfo::get()),
+            'timeout' => null,
+            'fail_fast' => false,
+            'max_retries' => 1,
+            'failure_threshold' => 5,
+            'recovery_timeout' => 3.0,
+            'half_open_max_calls' => 1,
+        ], $options);
+
+        $breaker = new CircuitBreaker(
+            (int) $config['failure_threshold'],
+            (float) $config['recovery_timeout'],
+            (int) $config['half_open_max_calls']
+        );
+
+        $balancer = new RoundRobinBalancer();
+        $distributed = $balancer->distribute($items, (int) $config['concurrency']);
+
+        $results = [];
+        $errors = [];
+        $skipped = [];
+
+        foreach ($distributed as $bucket) {
+            $tasks = [];
+            foreach ($bucket as $key => $item) {
+                $tasks[$key] = function () use ($key, $item, $handler, $breaker, $config, &$skipped) {
+                    $maxRetries = max(0, (int) $config['max_retries']);
+                    $attempt = 0;
+
+                    while ($attempt <= $maxRetries) {
+                        if (!$breaker->allowRequest()) {
+                            $skipped[$key] = 'circuit_open';
+                            return null;
+                        }
+
+                        try {
+                            $result = $handler($item, $key, $attempt);
+                            $breaker->recordSuccess();
+                            return $result;
+                        } catch (\Throwable $e) {
+                            $breaker->recordFailure();
+                            if ($attempt >= $maxRetries) {
+                                throw $e;
+                            }
+                            $attempt++;
+                        }
+                    }
+
+                    return null;
+                };
+            }
+
+            $chunkResult = static::concurrent($tasks, $config['timeout']);
+            foreach ($chunkResult as $key => $value) {
+                if ($value instanceof \Throwable) {
+                    $errors[$key] = $value;
+                    if ($config['fail_fast']) {
+                        throw new FiberException(
+                            sprintf('Resilient batch failed at key [%s]: %s', (string) $key, $value->getMessage()),
+                            (int) $value->getCode(),
+                            $value
+                        );
+                    }
+                    continue;
+                }
+
+                if (!array_key_exists($key, $skipped)) {
+                    $results[$key] = $value;
+                }
+            }
+        }
+
+        return [
+            'results' => $results,
+            'errors' => $errors,
+            'skipped' => $skipped,
+            'metrics' => [
+                'total' => count($items),
+                'success' => count($results),
+                'errors' => count($errors),
+                'skipped' => count($skipped),
+            ],
+            'breaker' => $breaker->metrics(),
+        ];
+    }
+
+    public static function scheduleDistributed(array $tasks, array $nodes = []): array
+    {
+        $scheduler = new DistributedScheduler();
+        foreach ($nodes as $nodeId => $meta) {
+            $scheduler->registerNode((string) $nodeId, is_array($meta) ? $meta : []);
+        }
+
+        return $scheduler->dispatch($tasks);
+    }
+
+    public static function scheduleDistributedAdvanced(array $tasks, array $nodes = [], array $options = []): array
+    {
+        $scheduler = new DistributedScheduler();
+        foreach ($nodes as $nodeId => $meta) {
+            $scheduler->registerNode((string) $nodeId, is_array($meta) ? $meta : []);
+        }
+
+        $unhealthyNodes = (array) ($options['unhealthy_nodes'] ?? []);
+        foreach ($unhealthyNodes as $nodeId) {
+            $scheduler->setNodeHealth((string) $nodeId, false);
+        }
+
+        return $scheduler->dispatch($tasks);
+    }
+
+    public static function resilientRun(callable $task, array $options = []): mixed
+    {
+        $config = array_merge([
+            'max_retries' => 1,
+            'failure_threshold' => 5,
+            'recovery_timeout' => 3.0,
+            'half_open_max_calls' => 1,
+            'fallback' => null,
+        ], $options);
+        $fallback = is_callable($config['fallback']) ? $config['fallback'] : null;
+
+        $breaker = new CircuitBreaker(
+            (int) $config['failure_threshold'],
+            (float) $config['recovery_timeout'],
+            (int) $config['half_open_max_calls']
+        );
+
+        $maxRetries = max(0, (int) $config['max_retries']);
+        $attempt = 0;
+        $lastError = null;
+
+        while ($attempt <= $maxRetries) {
+            try {
+                return $breaker->execute($task, $fallback);
+            } catch (\Throwable $e) {
+                $lastError = $e;
+                if ($attempt >= $maxRetries) {
+                    break;
+                }
+                $attempt++;
+            }
+        }
+
+        if ($fallback !== null) {
+            return $fallback();
+        }
+
+        throw new FiberException('Resilient run failed: ' . $lastError?->getMessage(), (int) ($lastError?->getCode() ?? 0), $lastError);
     }
 
     /**
