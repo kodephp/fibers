@@ -13,7 +13,7 @@ echo $result;
 
 ```php
 use Kode\Fibers\Fibers;
-use Kode\Fibers\Context\Context;
+use Kode\Context\Context;
 
 $value = Fibers::withContext(
     ['trace_id' => 'trace-1001'],

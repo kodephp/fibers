@@ -56,7 +56,7 @@ $result = Fibers::go(fn() => 'hello');
 
 $ctxResult = Fibers::withContext(
     ['trace_id' => 'trace-001'],
-    fn() => \Kode\Fibers\Context\Context::get('trace_id')
+    fn() => \Kode\Context\Context::get('trace_id')
 );
 
 $batch = Fibers::batch([1, 2, 3], fn(int $item) => $item * 2, 2);
@@ -744,20 +744,25 @@ php vendor/bin/fibers diagnose --help
 
 ---
 
-## 🧩 扩展建议（未来路线图）
+## 🧩 功能实现状态
 
-我们计划在未来版本中添加以下功能：
+### ✅ 已实现功能
 
-- [ ] **上下文传递机制**：类似 Go Context 的纤程上下文变量传递
-- [ ] **分布式 Fiber 调度**：跨多机器的纤程任务调度
-- [ ] **性能监控面板**：Fiber Profiler 可视化监控工具
-- [ ] **生态系统集成**：与 Swoole/OpenSwoole/Swow/Workerman 无缝桥接
-- [ ] **ORM 适配层**：Fiber-aware ORM（支持 Eloquent、Doctrine 等）
-- [ ] **断路器模式**：自动熔断和恢复机制
-- [ ] **负载均衡**：智能任务分发算法
+- [x] **上下文传递机制**：使用 `kode/context` 实现纤程上下文变量传递，支持跨设备
+- [x] **分布式 Fiber 调度**：`DistributedScheduler` 支持跨机器任务调度
+- [x] **性能监控面板**：`FiberProfiler` 和 `ProfilerDashboard` 可视化监控
+- [x] **生态系统集成**：`RuntimeBridge` 支持 Swoole/OpenSwoole/Swow/Workerman 桥接
+- [x] **ORM 适配层**：`EloquentAdapter` 和 `FixturesAdapter` 支持 Eloquent、Doctrine 等
+- [x] **断路器模式**：`CircuitBreaker` 实现自动熔断和恢复机制
+- [x] **负载均衡**：`RoundRobinBalancer` 智能任务分发算法
+
+### 🚧 计划中功能
+
 - [ ] **热重载支持**：不中断服务更新代码
 - [ ] **可视化管理界面**：Web UI 管理纤程池和任务
 - [ ] **更多框架支持**：持续扩展支持的 PHP 框架
+
+详细开发计划见 [路线图文档](docs/roadmap.md)。
 
 ---
 

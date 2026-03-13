@@ -4,16 +4,16 @@
 
 ## 核心能力
 
-- `Context::snapshot()`：导出当前上下文快照
+- `Context::copy()`：导出当前上下文快照
 - `Context::restore(array $snapshot)`：恢复上下文
-- `Context::runWith(array $context, callable $task)`：临时上下文运行
-- `Context::fork(array $extra = [])`：基于当前上下文派生新上下文
+- `Context::fork(callable $task)`：基于当前上下文派生新上下文运行任务
+- `Context::merge(array $data)`：合并上下文数据
 - `Fibers::concurrentWithContext(array $context, array $tasks)`：并发任务上下文透传
 
 ## 使用示例
 
 ```php
-use Kode\Fibers\Context\Context;
+use Kode\Context\Context;
 use Kode\Fibers\Fibers;
 
 Context::set('trace_id', 'root');
