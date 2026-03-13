@@ -2,12 +2,7 @@
 
 > 面向 PHP 8.1+ 的高性能 Fiber 纤程客户端，兼容主流框架并提供可降级、可诊断、可扩展的并发执行能力。
 
-[![Latest Version](https://img.shields.io/packagist/v/kode/fibers.svg?style=flat-square)](https://packagist.org/packages/kode/fibers)
-[![License](https://img.shields.io/packagist/l/Kode/fibers.svg?style=flat-square)](LICENSE)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/Kode-php/fibers/tests.yml?branch=main)](https://github.com/Kode-php/fibers/actions)
-[![Coverage](https://img.shields.io/codecov/c/github/Kode-php/fibers?token=XXXXX)](https://codecov.io/gh/Kode-php/fibers)
-
----
+***
 
 ## ✅ 特性概览
 
@@ -27,7 +22,7 @@
 
 ## 📖 项目背景
 
-`kode/fibers` 旨在为 Laravel、Symfony、Yii3、ThinkPHP8 及自建框架提供统一的纤程运行时能力，减少业务接入并发模型时的改造成本。  
+`kode/fibers` 旨在为 Laravel、Symfony、Yii3、ThinkPHP8 及自建框架提供统一的纤程运行时能力，减少业务接入并发模型时的改造成本。\
 项目重点解决三类问题：PHP 版本差异（尤其是 PHP<8.4 的析构限制）、生产场景下的并发治理（池化、超时、重试、通信）、以及跨框架可移植性（统一配置与 CLI 初始化）。
 
 ## 🗺️ 未来路线图
@@ -79,7 +74,7 @@ $features = Fibers::runtimeFeatures();
 - [Profiler 可视化面板](docs/profiler-dashboard.md)
 - [ORM 适配层](docs/orm-adapters.md)
 
----
+***
 
 ## 📦 安装
 
@@ -101,13 +96,13 @@ php vendor/bin/fibers init --framework=laravel
 
 各框架特定命令：
 
-| 框架         | 命令                            | 说明 |
-|--------------|----------------------------------|------|
-| Laravel      | `php artisan vendor:publish --tag=fibers-config` | 生成 `config/fibers.php` |
-| Symfony      | `bin/console fibers:install`     | 创建 `config/packages/fibers.yaml` |
-| Yii3         | `php yii fibers/setup`           | 初始化模块配置 |
-| ThinkPHP8    | `php think fibers:config`        | 生成 `config/fibers.php` |
-| 其他/原生    | `vendor/bin/fibers init`         | 交互式创建配置文件 |
+| 框架        | 命令                                               | 说明                               |
+| --------- | ------------------------------------------------ | -------------------------------- |
+| Laravel   | `php artisan vendor:publish --tag=fibers-config` | 生成 `config/fibers.php`           |
+| Symfony   | `bin/console fibers:install`                     | 创建 `config/packages/fibers.yaml` |
+| Yii3      | `php yii fibers/setup`                           | 初始化模块配置                          |
+| ThinkPHP8 | `php think fibers:config`                        | 生成 `config/fibers.php`           |
+| 其他/原生     | `vendor/bin/fibers init`                         | 交互式创建配置文件                        |
 
 ### 环境要求检查
 
@@ -120,7 +115,7 @@ php vendor/bin/fibers diagnose
 
 诊断结果将显示PHP版本、禁用函数、必要扩展等信息，并给出优化建议。
 
----
+***
 
 ## 🧱 架构设计原则
 
@@ -136,7 +131,7 @@ Kode\Fibers\Contracts\Runnable   // 可运行接口
 
 所有组件均实现 PSR 标准，支持 DI 容器注入。
 
----
+***
 
 ## 🧪 快速开始
 
@@ -197,13 +192,13 @@ $pool = new FiberPool([
 ]);
 ```
 
----
+***
 
 ## 🧰 核心功能详解
 
 ### ✅ 1. PHP 版本兼容性处理（含析构限制规避）
 
-> ⚠️ PHP 8.4 之前：**不允许在 `__destruct()` 中调用 `Fiber::suspend()`**
+> ⚠️ PHP 8.4 之前：**不允许在** **`__destruct()`** **中调用** **`Fiber::suspend()`**
 
 我们通过静态分析和运行时检测自动处理此问题，确保在不同PHP版本中都能正常运行：
 
@@ -216,11 +211,12 @@ if (PHP_VERSION_ID < 80400) {
 ```
 
 #### 自动降级策略：
-| 条件 | 行为 |
-|------|------|
-| PHP < 8.1 | 抛出异常，不支持 |
+
+| 条件                  | 行为                           |
+| ------------------- | ---------------------------- |
+| PHP < 8.1           | 抛出异常，不支持                     |
 | PHP >= 8.1 && < 8.4 | 启用延迟析构任务队列，安全处理析构中的suspend操作 |
-| PHP >= 8.4 | 正常允许在析构函数中使用suspend操作 |
+| PHP >= 8.4          | 正常允许在析构函数中使用suspend操作        |
 
 可通过配置关闭严格模式：
 
@@ -295,15 +291,15 @@ $pool->shutdown(true);
 
 #### 支持的操作类型
 
-| 类型       | 是否支持 | 示例 |
-|-----------|----------|------|
-| MySQL     | ✅       | `PDO::query()` in fiber |
-| PgSQL     | ✅       | `\PDO` 或 `\pg_connect()` |
-| Redis     | ✅       | `\Redis`, `\Predis\Client` |
-| HTTP      | ✅       | `file_get_contents`, `curl_exec`, Guzzle |
-| 文件 IO   | ✅       | `fopen`, `fwrite`（需异步驱动） |
-| Queue     | ✅       | Channel / MessageQueue |
-| Sleep     | ✅       | `usleep()` 被拦截为非阻塞 |
+| 类型    | 是否支持 | 示例                                       |
+| ----- | ---- | ---------------------------------------- |
+| MySQL | ✅    | `PDO::query()` in fiber                  |
+| PgSQL | ✅    | `\PDO` 或 `\pg_connect()`                 |
+| Redis | ✅    | `\Redis`, `\Predis\Client`               |
+| HTTP  | ✅    | `file_get_contents`, `curl_exec`, Guzzle |
+| 文件 IO | ✅    | `fopen`, `fwrite`（需异步驱动）                 |
+| Queue | ✅    | Channel / MessageQueue                   |
+| Sleep | ✅    | `usleep()` 被拦截为非阻塞                       |
 
 > 💡 提示：建议配合异步 I/O 扩展如 `swow` 或 `swoole` 使用以获得最佳性能。
 
@@ -600,18 +596,18 @@ if (Environment::supportsDestructInFiber()) {
 
 #### 常见禁用函数影响
 
-| 函数 | 影响 | 建议 |
-|------|------|-------|
-| `pcntl_*` | 多进程冲突 | 关闭或隔离使用 |
-| `set_time_limit` | 可能中断 suspend | 使用 `@ini_set` 局部关闭 |
-| `exec`, `shell_exec` | 阻塞调用 | 替换为异步执行器 |
-| `sleep`, `usleep` | 阻塞主线程 | 已被 Fiber 内部重写为非阻塞 |
-| `exit`, `die` | 终止整个进程 | 避免使用，改用抛出异常 |
-| `header`, `session_start` | 可能破坏上下文 | 在主纤程中使用，或使用上下文管理器 |
+| 函数                        | 影响           | 建议                 |
+| ------------------------- | ------------ | ------------------ |
+| `pcntl_*`                 | 多进程冲突        | 关闭或隔离使用            |
+| `set_time_limit`          | 可能中断 suspend | 使用 `@ini_set` 局部关闭 |
+| `exec`, `shell_exec`      | 阻塞调用         | 替换为异步执行器           |
+| `sleep`, `usleep`         | 阻塞主线程        | 已被 Fiber 内部重写为非阻塞  |
+| `exit`, `die`             | 终止整个进程       | 避免使用，改用抛出异常        |
+| `header`, `session_start` | 可能破坏上下文      | 在主纤程中使用，或使用上下文管理器  |
 
 > ✅ 我们会在初始化时尝试模拟这些函数的安全替代品。
 
----
+***
 
 ## 📘 使用场景指南
 
@@ -642,10 +638,10 @@ $response = Fiber::run(function() {
 }, 5); // 5秒超时
 ```
 
-✅ 优点：零配置、无副作用  
+✅ 优点：零配置、无副作用\
 ❌ 缺点：无法复用、无资源管控
 
----
+***
 
 ### 🏗️ 何时使用 `FiberPool`？（生产推荐）
 
@@ -685,13 +681,14 @@ foreach ($tasks as $task) {
 ```
 
 ✅ 支持：
+
 - 资源复用
 - 错误重试
 - 超时熔断
 - 监控埋点
 - 并发控制
 
----
+***
 
 ## 🛠️ CLI 命令列表
 
@@ -742,7 +739,7 @@ php vendor/bin/fibers diagnose --help
 --task=TYPE              测试任务类型 (io, cpu, mixed)
 ```
 
----
+***
 
 ## 🧩 功能实现状态
 
@@ -762,14 +759,9 @@ php vendor/bin/fibers diagnose --help
 - [x] **PHP 8.5 特性支持**：`Php85Features` 自动适配新特性
 - [x] **多框架支持**：Laravel、Lumen、Symfony、Hyperf、Webman、Yii3、ThinkPHP8
 
-### 🚧 计划中功能
-
-- [ ] **更多框架支持**：RoadRunner、Spiral 等
-- [ ] **IO_uring 支持**：需要 PHP 扩展支持
-
 详细开发计划见 [路线图文档](docs/roadmap.md)。
 
----
+***
 
 ## 📚 参考资料
 
@@ -780,38 +772,40 @@ php vendor/bin/fibers diagnose --help
 - [Go Channels in PHP](https://github.com/amphp/amp) - PHP 中的 Go 通道实现
 - [RevoltPHP Event Loop](https://github.com/revoltphp/event-loop) - 事件循环实现参考
 
----
+***
 
 ## 📄 许可证
 
 Apache 2.0 License. See [LICENSE](./LICENSE) for full text.
 
----
+***
 
 ## 🙌 贡献者
 
 欢迎提交 PR！请确保：
+
 - ✅ 单元测试覆盖率 ≥ 90%
 - ✅ 符合 PSR-12 编码规范
 - ✅ 更新文档与 CHANGELOG
 
----
+***
 
-> Maintained by **Byte Team - Kode PHP Lab**  
-> 🌐 https://github.com/Kode-php/fibers
+> Maintained by **Byte Team - Kode PHP Lab**\
+> 🌐 <https://github.com/Kode-php/fibers>
 
----
+***
 
 ✅ **已完成目标清单：**
 
-| 要求 | 完成情况 |
-|------|----------|
-| PHP 8.1+ 支持 & 8.4 析构兼容 | ✅ |
-| 纤程池 + CPU 感知 | ✅ |
-| 多框架配置生成 | ✅ |
-| 原生注解 + IDE 识别 | ✅ |
-| README 使用说明详尽 | ✅ |
-| 禁用函数检测 | ✅ |
-| 通信、队列、IO、超时等 | ✅ |
+| 要求                     | 完成情况 |
+| ---------------------- | ---- |
+| PHP 8.1+ 支持 & 8.4 析构兼容 | ✅    |
+| 纤程池 + CPU 感知           | ✅    |
+| 多框架配置生成                | ✅    |
+| 原生注解 + IDE 识别          | ✅    |
+| README 使用说明详尽          | ✅    |
+| 禁用函数检测                 | ✅    |
+| 通信、队列、IO、超时等           | ✅    |
 
----
+***
+
