@@ -20,6 +20,8 @@ use Kode\Fibers\Support\Environment;
 use Kode\Fibers\Support\CpuInfo;
 use Kode\Fibers\Support\Roadmap;
 use Kode\Fibers\Support\RuntimeBridge;
+use Kode\Fibers\Support\HotReloader;
+use Kode\Fibers\WebUI\WebUI;
 use Kode\Fibers\Exceptions\FiberException;
 use Kode\Fibers\Task\TaskRunner;
 use Kode\Fibers\Task\Task;
@@ -652,6 +654,29 @@ class Fibers
     public static function roadmap(): array
     {
         return Roadmap::items();
+    }
+
+    /**
+     * 创建热重载器实例
+     *
+     * @param array $watchDirs 监控的目录
+     * @param array $options 配置选项
+     * @return HotReloader
+     */
+    public static function hotReload(array $watchDirs = [], array $options = []): HotReloader
+    {
+        return new HotReloader($watchDirs, $options);
+    }
+
+    /**
+     * 创建 Web UI 实例
+     *
+     * @param array $options 配置选项
+     * @return WebUI
+     */
+    public static function webUI(array $options = []): WebUI
+    {
+        return new WebUI($options);
     }
 
     /**

@@ -755,12 +755,12 @@ php vendor/bin/fibers diagnose --help
 - [x] **ORM 适配层**：`EloquentAdapter` 和 `FixturesAdapter` 支持 Eloquent、Doctrine 等
 - [x] **断路器模式**：`CircuitBreaker` 实现自动熔断和恢复机制
 - [x] **负载均衡**：`RoundRobinBalancer` 智能任务分发算法
+- [x] **热重载支持**：`HotReloader` 实现不中断服务更新代码
+- [x] **可视化管理界面**：`WebUI` 提供 Web UI 管理纤程池和任务
 
 ### 🚧 计划中功能
 
-- [ ] **热重载支持**：不中断服务更新代码
-- [ ] **可视化管理界面**：Web UI 管理纤程池和任务
-- [ ] **更多框架支持**：持续扩展支持的 PHP 框架
+- [ ] **更多框架支持**：持续扩展支持的 PHP 框架（RoadRunner、Spiral 等）
 
 详细开发计划见 [路线图文档](docs/roadmap.md)。
 

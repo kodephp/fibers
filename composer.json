@@ -3,7 +3,7 @@
     "description": "高性能 Fiber 线程池与协程调度器",
     "type": "library",
     "license": "Apache-2.0",
-    "version": "2.6.0",
+    "version": "2.7.0",
     "authors": [
         {
             "name": "Kode Team",
