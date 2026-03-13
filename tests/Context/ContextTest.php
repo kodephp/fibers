@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Kode\Fibers\Tests\Context;
 
-use Kode\Fibers\Context\Context;
+use Kode\Context\Context;
 use PHPUnit\Framework\TestCase;
 
 class ContextTest extends TestCase
@@ -13,7 +13,7 @@ class ContextTest extends TestCase
     {
         Context::clear();
         Context::set('k', 'v1');
-        $snapshot = Context::snapshot();
+        $snapshot = Context::copy();
         Context::set('k', 'v2');
         Context::restore($snapshot);
 
@@ -24,7 +24,10 @@ class ContextTest extends TestCase
     {
         Context::clear();
         Context::set('trace_id', 'root');
-        $result = Context::runWith(['trace_id' => 'child'], static fn() => Context::get('trace_id'));
+        $result = Context::fork(function () {
+            Context::set('trace_id', 'child');
+            return Context::get('trace_id');
+        });
 
         $this->assertSame('child', $result);
         $this->assertSame('root', Context::get('trace_id'));

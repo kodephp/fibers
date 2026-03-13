@@ -3,20 +3,20 @@
     "description": "高性能 Fiber 线程池与协程调度器",
     "type": "library",
     "license": "Apache-2.0",
-    "version": "2.4.0",
+    "version": "2.5.1",
     "authors": [
         {
-            "name": "Byte Team",
-            "email": "byte-team@example.com"
+            "name": "Kode Team",
+            "email": "382601296@qq.com"
         }
     ],
     "require": {
         "php": "^8.1",
         "guzzlehttp/psr7": "^2.8",
-        "kode/aop": "^1.0",
+        "kode/aop": "^2.0",
         "kode/attributes": "^1.0",
-        "kode/context": "^1.1",
-        "kode/facade": "^1.2",
+        "kode/context": "^2.1",
+        "kode/facade": "^2.0",
         "kode/http-client": "^2.1",
         "kode/console": "^2.1"
     },

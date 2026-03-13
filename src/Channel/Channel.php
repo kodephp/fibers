@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Kode\Fibers\Channel;
 
 use Kode\Fibers\Exceptions\FiberException;
-use Kode\Fibers\Context\Context;
+use Kode\Context\Context;
 use Fiber;
 use Closure;
 use RuntimeException;

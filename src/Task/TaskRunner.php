@@ -8,6 +8,7 @@ use Kode\Fibers\Core\FiberPool;
 use Kode\Fibers\Contracts\Runnable;
 use Kode\Fibers\Exceptions\FiberException;
 use Kode\Fibers\Attributes\Timeout;
+use Kode\Context\Context;
 
 /**
  * Task runner for fiber tasks
@@ -66,15 +67,14 @@ class TaskRunner
 
         try {
             if (!empty($context)) {
-                \Kode\Fibers\Context\Context::inherit();
-                \Kode\Fibers\Context\Context::setMultiple($context);
+                Context::merge($context);
             }
 
             $result = $task instanceof Runnable ? $task->run() : $task();
         } catch (\Throwable $e) {
             throw new FiberException("Task execution failed: " . $e->getMessage(), 0, $e);
         } finally {
-            \Kode\Fibers\Context\Context::clear();
+            Context::clear();
         }
 
         $elapsedTime = microtime(true) - $startTime;

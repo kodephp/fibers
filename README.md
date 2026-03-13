@@ -2,7 +2,7 @@
 
 > 面向 PHP 8.1+ 的高性能 Fiber 纤程客户端，兼容主流框架并提供可降级、可诊断、可扩展的并发执行能力。
 
-[![Latest Version](https://img.shields.io/packagist/v/Kode/fibers.svg?style=flat-square)](https://packagist.org/packages/Kode/fibers)
+[![Latest Version](https://img.shields.io/packagist/v/kode/fibers.svg?style=flat-square)](https://packagist.org/packages/kode/fibers)
 [![License](https://img.shields.io/packagist/l/Kode/fibers.svg?style=flat-square)](LICENSE)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/Kode-php/fibers/tests.yml?branch=main)](https://github.com/Kode-php/fibers/actions)
 [![Coverage](https://img.shields.io/codecov/c/github/Kode-php/fibers?token=XXXXX)](https://codecov.io/gh/Kode-php/fibers)

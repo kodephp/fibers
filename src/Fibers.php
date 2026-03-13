@@ -6,7 +6,7 @@ namespace Kode\Fibers;
 
 use Kode\Fibers\Core\FiberPool;
 use Kode\Fibers\Channel\Channel;
-use Kode\Fibers\Context\Context;
+use Kode\Context\Context;
 use Kode\Fibers\Core\CircuitBreaker;
 use Kode\Fibers\Core\RoundRobinBalancer;
 use Kode\Fibers\Core\DistributedScheduler;
@@ -292,20 +292,22 @@ class Fibers
 
     public static function withContext(array $context, callable $task, ?float $timeout = null): mixed
     {
-        return static::run(fn() => Context::runWith($context, $task), $timeout);
+        return static::run(fn() => Context::fork(function () use ($context, $task) {
+            Context::merge($context);
+            return $task();
+        }), $timeout);
     }
 
     public static function concurrentWithContext(array $context, array $tasks, ?float $timeout = null): array
     {
-        $snapshot = Context::fork($context);
         $wrapped = [];
         foreach ($tasks as $key => $task) {
-            $wrapped[$key] = function () use ($task, $snapshot) {
-                return Context::runWith($snapshot, function () use ($task) {
+            $wrapped[$key] = function () use ($context, $task) {
+                return Context::fork(function () use ($context, $task) {
+                    Context::merge($context);
                     if ($task instanceof \Closure || is_callable($task)) {
                         return $task();
                     }
-
                     return $task;
                 });
             };

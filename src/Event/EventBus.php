@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace Kode\Fibers\Event;
 
-use Kode\Fibers\Context\Context;
+use Kode\Context\Context;
 use Closure;
 use SplPriorityQueue;
 use RuntimeException;
@@ -109,7 +109,7 @@ class EventBus
         }
 
         // 获取全局上下文数据
-        $context = Context::getAll();
+        $context = Context::copy();
 
         // 执行全局中间件
         $middlewareStack = array_reverse(self::$globalMiddlewares);

@@ -15,7 +15,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 
 use Kode\Fibers\Fibers;
 use Kode\Fibers\Channel\Channel;
-use Kode\Fibers\Context\Context;
+use Kode\Context\Context;
 
 // 示例1: 基本的通道通信
 function basicChannelCommunication() {

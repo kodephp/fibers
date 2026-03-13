@@ -6,7 +6,7 @@ namespace Kode\Fibers\Http\Middleware;
 
 use Closure;
 use Kode\Fibers\Fibers;
-use Kode\Fibers\Context\Context;
+use Kode\Context\Context;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Server\MiddlewareInterface;
@@ -97,7 +97,7 @@ class EnableFibers implements MiddlewareInterface
         }
         
         // 设置上下文
-        Context::setMultiple($context);
+        Context::merge($context);
         Fibers::setAppContext($context);
     }
     

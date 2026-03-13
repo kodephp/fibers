@@ -4,15 +4,18 @@ declare(strict_types=1);
 
 namespace Kode\Fibers\Attributes;
 
-use Attribute;
-use Kode\Attributes\Attribute as BaseAttribute;
-
 /**
- * Base Attribute interface for Fiber-related attributes
+ * 基础属性接口
  *
- * This interface extends Kode\Attributes\Attribute
+ * 所有 Fiber 相关属性的标记接口，用于标识属性类型。
+ * 支持通过反射获取属性元数据。
  */
-interface Attribute extends BaseAttribute
+interface Attribute
 {
-    // 使用Kode\Attributes包提供的完整功能，不需要额外实现
+    /**
+     * 获取属性元数据
+     *
+     * @return array 属性配置数组
+     */
+    public function getMetadata(): array;
 }

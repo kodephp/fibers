@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Kode\Fibers\Tests;
 
-use Kode\Fibers\Context\Context;
+use Kode\Context\Context;
 use Kode\Fibers\Exceptions\FiberException;
 use Kode\Fibers\Fibers;
 use PHPUnit\Framework\TestCase;
@@ -156,8 +156,8 @@ class FibersTest extends TestCase
         $results = Fibers::concurrentWithContext(
             ['trace_id' => 'trace-ctx-1'],
             [
-                static fn() => \Kode\Fibers\Context\Context::get('trace_id'),
-                static fn() => \Kode\Fibers\Context\Context::get('trace_id'),
+                static fn() => Context::get('trace_id'),
+                static fn() => Context::get('trace_id'),
             ]
         );
 

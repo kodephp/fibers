@@ -8,21 +8,13 @@ use PHPUnit\Framework\TestCase;
 use Kode\Fibers\HttpClient\HttpClient;
 use Kode\Fibers\Exceptions\FiberException;
 use Kode\HttpClient\HttpClientInterface as BaseHttpClient;
-use Kode\HttpClient\Context\Context as HttpContext;
 use GuzzleHttp\Psr7\Response as PsrResponse;
 use Psr\Http\Message\RequestInterface;
 
 class HttpClientTest extends TestCase
 {
-    /**
-     * @var \PHPUnit\Framework\MockObject\MockObject|BaseHttpClient
-     */
     private $mockBaseClient;
-
-    /**
-     * @var HttpClient
-     */
-    private $httpClient;
+    private HttpClient $httpClient;
 
     protected function setUp(): void
     {
@@ -30,13 +22,13 @@ class HttpClientTest extends TestCase
         $this->httpClient = new HttpClient([], $this->mockBaseClient);
     }
 
-    public function testMakeMethodCreatesInstance()
+    public function testMakeMethodCreatesInstance(): void
     {
         $instance = HttpClient::make(['timeout' => 10]);
         $this->assertInstanceOf(HttpClient::class, $instance);
     }
 
-    public function testGetMethod()
+    public function testGetMethod(): void
     {
         $mockResponse = new PsrResponse(200, ['Content-Type' => 'application/json']);
         $this->mockBaseClient->expects($this->once())
@@ -46,8 +38,7 @@ class HttpClientTest extends TestCase
                     return $request->getMethod() === 'GET' &&
                         (string) $request->getUri() === 'https://example.com' &&
                         $request->getHeaderLine('Content-Type') === 'application/json';
-                }),
-                $this->isInstanceOf(HttpContext::class)
+                })
             )
             ->willReturn($mockResponse);
 
@@ -55,7 +46,7 @@ class HttpClientTest extends TestCase
         $this->assertInstanceOf(PsrResponse::class, $response);
     }
 
-    public function testPostMethod()
+    public function testPostMethod(): void
     {
         $mockResponse = new PsrResponse(201);
         $this->mockBaseClient->expects($this->once())
@@ -65,8 +56,7 @@ class HttpClientTest extends TestCase
                     return $request->getMethod() === 'POST' &&
                         (string) $request->getUri() === 'https://example.com/api' &&
                         (string) $request->getBody() === '{"name":"test"}';
-                }),
-                null
+                })
             )
             ->willReturn($mockResponse);
 
@@ -74,7 +64,7 @@ class HttpClientTest extends TestCase
         $this->assertInstanceOf(PsrResponse::class, $response);
     }
 
-    public function testPutMethod()
+    public function testPutMethod(): void
     {
         $mockResponse = new PsrResponse(200);
         $this->mockBaseClient->expects($this->once())
@@ -82,15 +72,14 @@ class HttpClientTest extends TestCase
             ->with(
                 $this->callback(function (RequestInterface $request) {
                     return $request->getMethod() === 'PUT';
-                }),
-                null
+                })
             )
             ->willReturn($mockResponse);
         $response = $this->httpClient->put('https://example.com/api/1', ['name' => 'updated']);
         $this->assertInstanceOf(PsrResponse::class, $response);
     }
 
-    public function testDeleteMethod()
+    public function testDeleteMethod(): void
     {
         $mockResponse = new PsrResponse(204);
         $this->mockBaseClient->expects($this->once())
@@ -98,15 +87,14 @@ class HttpClientTest extends TestCase
             ->with(
                 $this->callback(function (RequestInterface $request) {
                     return $request->getMethod() === 'DELETE';
-                }),
-                null
+                })
             )
             ->willReturn($mockResponse);
         $response = $this->httpClient->delete('https://example.com/api/1');
         $this->assertInstanceOf(PsrResponse::class, $response);
     }
 
-    public function testPatchMethod()
+    public function testPatchMethod(): void
     {
         $mockResponse = new PsrResponse(200);
         $this->mockBaseClient->expects($this->once())
@@ -114,15 +102,14 @@ class HttpClientTest extends TestCase
             ->with(
                 $this->callback(function (RequestInterface $request) {
                     return $request->getMethod() === 'PATCH';
-                }),
-                null
+                })
             )
             ->willReturn($mockResponse);
         $response = $this->httpClient->patch('https://example.com/api/1', ['name' => 'patched']);
         $this->assertInstanceOf(PsrResponse::class, $response);
     }
 
-    public function testHeadMethod()
+    public function testHeadMethod(): void
     {
         $mockResponse = new PsrResponse(200);
         $this->mockBaseClient->expects($this->once())
@@ -130,15 +117,14 @@ class HttpClientTest extends TestCase
             ->with(
                 $this->callback(function (RequestInterface $request) {
                     return $request->getMethod() === 'HEAD';
-                }),
-                null
+                })
             )
             ->willReturn($mockResponse);
         $response = $this->httpClient->head('https://example.com');
         $this->assertInstanceOf(PsrResponse::class, $response);
     }
 
-    public function testOptionsMethod()
+    public function testOptionsMethod(): void
     {
         $mockResponse = new PsrResponse(200);
         $this->mockBaseClient->expects($this->once())
@@ -146,30 +132,26 @@ class HttpClientTest extends TestCase
             ->with(
                 $this->callback(function (RequestInterface $request) {
                     return $request->getMethod() === 'OPTIONS';
-                }),
-                null
+                })
             )
             ->willReturn($mockResponse);
         $response = $this->httpClient->options('https://example.com');
         $this->assertInstanceOf(PsrResponse::class, $response);
     }
 
-    public function testSendMethodWithException()
+    public function testSendMethodWithException(): void
     {
-        // 设置模拟行为抛出异常
         $this->mockBaseClient->expects($this->once())
             ->method('sendRequest')
             ->willThrowException(new \Exception('Connection error'));
         
-        // 验证异常
         $this->expectException(FiberException::class);
         $this->expectExceptionMessage('HTTP request failed: Connection error');
         
-        // 执行测试
         $this->httpClient->send('GET', 'https://example.com');
     }
 
-    public function testGetEnvironmentInfo()
+    public function testGetEnvironmentInfo(): void
     {
         $info = $this->httpClient->getEnvironmentInfo();
         
@@ -180,7 +162,7 @@ class HttpClientTest extends TestCase
         $this->assertArrayHasKey('disabled_functions', $info);
     }
 
-    public function testConcurrentRequests()
+    public function testConcurrentRequests(): void
     {
         $requests = [
             ['method' => 'GET', 'url' => 'https://example.com/1'],
@@ -211,7 +193,7 @@ class HttpClientTest extends TestCase
         $this->assertEquals('application/x-www-form-urlencoded', $detectContentTypeMethod->invoke($this->httpClient, 'key=value'));
     }
 
-    public function testGetClient()
+    public function testGetClient(): void
     {
         $client = $this->httpClient->getClient();
         $this->assertInstanceOf(BaseHttpClient::class, $client);

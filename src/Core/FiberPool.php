@@ -8,7 +8,7 @@ use Kode\Fibers\Support\CpuInfo;
 use Kode\Fibers\Exceptions\FiberException;
 use Kode\Fibers\Contracts\Runnable;
 use Kode\Fibers\Task\Task;
-use Kode\Fibers\Context\Context;
+use Kode\Context\Context;
 use Kode\Fibers\Fibers;
 use Fiber;
 use RuntimeException;
@@ -397,16 +397,14 @@ class FiberPool
         
         return new Fiber(function (Runnable $task) use ($context) {
             try {
-                // 设置纤程上下文
-                Context::setMultiple($context);
+                if (!empty($context)) {
+                    Context::merge($context);
+                }
                 
-                // 执行任务
                 return $task->run();
             } catch (\Throwable $e) {
-                // 在Fiber内部捕获异常，确保Fiber能够正常终止
                 throw $e;
             } finally {
-                // 清理上下文
                 Context::clear();
             }
         });

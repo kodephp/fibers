@@ -172,9 +172,9 @@ class HttpClient
             }
 
             $request = new Psr7Request($method, $url, $normalizedHeaders, $body);
-            $context = $this->buildContext($options);
+            $this->applyContext($options);
 
-            return $this->client->sendRequest($request, $context);
+            return $this->client->sendRequest($request);
         } catch (\Throwable $e) {
             throw new FiberException('HTTP request failed: ' . $e->getMessage(), (int)$e->getCode(), $e);
         }
@@ -271,16 +271,13 @@ class HttpClient
     }
 
     /**
-     * 构建请求上下文
+     * 应用请求上下文配置
      */
-    protected function buildContext(array $options): ?HttpContext
+    protected function applyContext(array $options): void
     {
-        if (!isset($options['timeout'])) {
-            return null;
+        if (isset($options['timeout'])) {
+            HttpContext::setTimeout((float) $options['timeout']);
         }
-
-        $context = new HttpContext();
-        return $context->withTimeout((float) $options['timeout']);
     }
 
     /**
