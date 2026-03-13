@@ -184,7 +184,7 @@ class FibersTest extends TestCase
         $this->assertNotEmpty($profile['records']);
 
         $html = Fibers::profilerDashboard($profile['records']);
-        $this->assertStringContainsString('Fiber Profiler Dashboard', $html);
-        $this->assertStringContainsString('demo', $html);
+        $this->assertStringContainsString('Kode/Fibers Dashboard', $html);
+        $this->assertStringContainsString('PHP', $html);
     }
 }

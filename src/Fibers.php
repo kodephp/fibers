@@ -13,7 +13,6 @@ use Kode\Fibers\Core\DistributedScheduler;
 use Kode\Fibers\Core\InMemoryNodeTransport;
 use Kode\Fibers\Contracts\NodeTransportInterface;
 use Kode\Fibers\Profiler\FiberProfiler;
-use Kode\Fibers\Profiler\ProfilerDashboard;
 use Kode\Fibers\ORM\EloquentAdapter;
 use Kode\Fibers\ORM\FixturesAdapter;
 use Kode\Fibers\Support\Environment;
@@ -21,7 +20,10 @@ use Kode\Fibers\Support\CpuInfo;
 use Kode\Fibers\Support\Roadmap;
 use Kode\Fibers\Support\RuntimeBridge;
 use Kode\Fibers\Support\HotReloader;
+use Kode\Fibers\Support\Php85Features;
 use Kode\Fibers\WebUI\WebUI;
+use Kode\Fibers\Pool\ConnectionPool;
+use Kode\Fibers\Debug\FiberDebugger;
 use Kode\Fibers\Exceptions\FiberException;
 use Kode\Fibers\Task\TaskRunner;
 use Kode\Fibers\Task\Task;
@@ -542,7 +544,25 @@ class Fibers
 
     public static function profilerDashboard(array $records): string
     {
-        return ProfilerDashboard::renderHtml($records);
+        $webUI = new WebUI();
+        return $webUI->renderDashboard();
+    }
+    
+    /**
+     * 渲染性能分析仪表盘
+     *
+     * @param array $records 性能记录
+     * @return string HTML内容
+     */
+    public static function profilerRenderDashboard(array $records): string
+    {
+        $profiler = new FiberProfiler();
+        foreach ($records as $record) {
+            $profiler->profile($record['name'] ?? 'task', fn() => $record);
+        }
+        
+        $webUI = new WebUI(['profiler' => $profiler]);
+        return $webUI->renderDashboard();
     }
 
     public static function eloquent(object $connection): EloquentAdapter
@@ -677,6 +697,133 @@ class Fibers
     public static function webUI(array $options = []): WebUI
     {
         return new WebUI($options);
+    }
+
+    /**
+     * 创建连接池实例
+     *
+     * @param array $config 配置选项
+     * @param callable|null $factory 连接工厂
+     * @return ConnectionPool
+     */
+    public static function connectionPool(array $config = [], ?callable $factory = null): ConnectionPool
+    {
+        return new ConnectionPool($config, $factory);
+    }
+
+    /**
+     * 创建PDO连接池
+     *
+     * @param string $dsn 数据源名称
+     * @param string $username 用户名
+     * @param string $password 密码
+     * @param array $options PDO选项
+     * @param array $poolConfig 连接池配置
+     * @return ConnectionPool
+     */
+    public static function pdoPool(string $dsn, string $username = '', string $password = '', array $options = [], array $poolConfig = []): ConnectionPool
+    {
+        return ConnectionPool::pdo($dsn, $username, $password, $options, $poolConfig);
+    }
+
+    /**
+     * 创建Redis连接池
+     *
+     * @param string $host 主机
+     * @param int $port 端口
+     * @param string $password 密码
+     * @param int $database 数据库
+     * @param array $poolConfig 连接池配置
+     * @return ConnectionPool
+     */
+    public static function redisPool(string $host = '127.0.0.1', int $port = 6379, string $password = '', int $database = 0, array $poolConfig = []): ConnectionPool
+    {
+        return ConnectionPool::redis($host, $port, $password, $database, $poolConfig);
+    }
+
+    /**
+     * 获取调试器实例
+     *
+     * @return FiberDebugger
+     */
+    public static function debugger(): FiberDebugger
+    {
+        return new FiberDebugger();
+    }
+
+    /**
+     * 启用调试模式
+     *
+     * @return void
+     */
+    public static function enableDebug(): void
+    {
+        FiberDebugger::enable();
+    }
+
+    /**
+     * 禁用调试模式
+     *
+     * @return void
+     */
+    public static function disableDebug(): void
+    {
+        FiberDebugger::disable();
+    }
+
+    /**
+     * 获取PHP 8.5特性支持状态
+     *
+     * @return array
+     */
+    public static function php85Features(): array
+    {
+        return Php85Features::getAvailableFeatures();
+    }
+
+    /**
+     * 并发cURL请求
+     *
+     * @param array $urls URL列表
+     * @param array $options 选项
+     * @return array
+     */
+    public static function multiCurl(array $urls, array $options = []): array
+    {
+        return Php85Features::multiCurl($urls, $options);
+    }
+
+    /**
+     * 跨机器执行任务（便捷方法）
+     *
+     * @param string $nodeId 节点ID
+     * @param callable $task 任务
+     * @return mixed
+     */
+    public static function remote(string $nodeId, callable $task): mixed
+    {
+        return static::scheduleDistributedRemote(
+            [$nodeId => $task],
+            [$nodeId => ['healthy' => true]]
+        )[$nodeId] ?? null;
+    }
+
+    /**
+     * 在指定节点执行任务
+     *
+     * @param string $nodeId 节点ID
+     * @param callable $task 任务
+     * @param array $nodeConfig 节点配置
+     * @return mixed
+     */
+    public static function onNode(string $nodeId, callable $task, array $nodeConfig = []): mixed
+    {
+        $nodes = [$nodeId => array_merge(['healthy' => true], $nodeConfig)];
+        $tasks = [$nodeId => $task];
+        
+        $result = static::scheduleDistributed($tasks, $nodes);
+        
+        return $result[$nodeId] ?? null;
     }
 
     /**
