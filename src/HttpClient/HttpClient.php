@@ -8,61 +8,47 @@ use Kode\Fibers\Attributes\FiberSafe;
 use Kode\Fibers\Attributes\Timeout;
 use Kode\Fibers\Fibers;
 use Kode\Fibers\Exceptions\FiberException;
-use Kode\HttpClient\Context\Context as HttpContext;
-use Kode\HttpClient\HttpClientInterface as BaseHttpClient;
-use Kode\HttpClient\HttpClient as NativeHttpClient;
-use Kode\HttpClient\Driver\CurlDriver;
-use GuzzleHttp\Psr7\Request as Psr7Request;
 use Psr\Http\Message\ResponseInterface;
 
 /**
  * Fiber-safe HTTP client
  *
- * This client provides fiber-aware HTTP request functionality with support
- * for concurrent requests and non-blocking operations.
- *
- * @method Response get(string $url, array $headers = [], array $options = [])
- * @method Response post(string $url, mixed $data = [], array $headers = [], array $options = [])
- * @method Response put(string $url, mixed $data = [], array $headers = [], array $options = [])
- * @method Response delete(string $url, array $headers = [], array $options = [])
- * @method Response patch(string $url, mixed $data = [], array $headers = [], array $options = [])
- * @method Response head(string $url, array $headers = [], array $options = [])
- * @method Response options(string $url, array $headers = [], array $options = [])
- * @method array concurrent(array $requests, int $concurrency = 5, float $timeout = 30)
+ * 需要: composer require kode/http-client guzzlehttp/psr7
  */
 class HttpClient
 {
-    /**
-     * 底层 HTTP 客户端实例
-     */
-    protected BaseHttpClient $client;
-
-    /**
-     * 客户端初始化选项
-     */
+    protected $client;
     protected array $clientOptions = [];
 
-    /**
-     * 创建 Fiber 安全 HTTP 客户端
-     */
-    public function __construct(array $options = [], ?BaseHttpClient $client = null)
+    public function __construct(array $options = [], $client = null)
     {
-        $this->checkEnvironment();
+        $this->ensureDependencies();
         $this->clientOptions = $options;
-        $this->client = $client ?? new NativeHttpClient(new CurlDriver());
+        $this->client = $client ?? new \Kode\HttpClient\HttpClient(new \Kode\HttpClient\Driver\CurlDriver());
     }
 
-    /**
-     * 工厂方法
-     */
+    protected function ensureDependencies(): void
+    {
+        if (!class_exists(\Kode\HttpClient\HttpClient::class)) {
+            throw new FiberException(
+                'HTTP client requires kode/http-client package. ' .
+                'Install it with: composer require kode/http-client'
+            );
+        }
+        
+        if (!class_exists(\GuzzleHttp\Psr7\Request::class)) {
+            throw new FiberException(
+                'HTTP client requires guzzlehttp/psr7 package. ' .
+                'Install it with: composer require guzzlehttp/psr7'
+            );
+        }
+    }
+
     public static function make(array $options = []): static
     {
         return new static($options);
     }
 
-    /**
-     * 检查运行环境
-     */
     protected function checkEnvironment(): void
     {
         if (PHP_VERSION_ID < 80100) {
@@ -75,9 +61,6 @@ class HttpClient
         }
     }
 
-    /**
-     * 获取运行环境信息
-     */
     public function getEnvironmentInfo(): array
     {
         return [
@@ -89,72 +72,48 @@ class HttpClient
         ];
     }
 
-    /**
-     * 发起 GET 请求
-     */
     #[FiberSafe]
     public function get(string $url, array $headers = [], array $options = []): ResponseInterface
     {
         return $this->send('GET', $url, [], $headers, $options);
     }
 
-    /**
-     * 发起 POST 请求
-     */
     #[FiberSafe]
     public function post(string $url, mixed $data = [], array $headers = [], array $options = []): ResponseInterface
     {
         return $this->send('POST', $url, $data, $headers, $options);
     }
 
-    /**
-     * 发起 PUT 请求
-     */
     #[FiberSafe]
     public function put(string $url, mixed $data = [], array $headers = [], array $options = []): ResponseInterface
     {
         return $this->send('PUT', $url, $data, $headers, $options);
     }
 
-    /**
-     * 发起 DELETE 请求
-     */
     #[FiberSafe]
     public function delete(string $url, array $headers = [], array $options = []): ResponseInterface
     {
         return $this->send('DELETE', $url, [], $headers, $options);
     }
 
-    /**
-     * 发起 PATCH 请求
-     */
     #[FiberSafe]
     public function patch(string $url, mixed $data = [], array $headers = [], array $options = []): ResponseInterface
     {
         return $this->send('PATCH', $url, $data, $headers, $options);
     }
 
-    /**
-     * 发起 HEAD 请求
-     */
     #[FiberSafe]
     public function head(string $url, array $headers = [], array $options = []): ResponseInterface
     {
         return $this->send('HEAD', $url, [], $headers, $options);
     }
 
-    /**
-     * 发起 OPTIONS 请求
-     */
     #[FiberSafe]
     public function options(string $url, array $headers = [], array $options = []): ResponseInterface
     {
         return $this->send('OPTIONS', $url, [], $headers, $options);
     }
 
-    /**
-     * 发起 HTTP 请求
-     */
     #[FiberSafe]
     #[Timeout(30)]
     public function send(string $method, string $url, mixed $data = [], array $headers = [], array $options = []): ResponseInterface
@@ -171,7 +130,7 @@ class HttpClient
                     : (is_array($data) ? http_build_query($data) : (string) $data);
             }
 
-            $request = new Psr7Request($method, $url, $normalizedHeaders, $body);
+            $request = new \GuzzleHttp\Psr7\Request($method, $url, $normalizedHeaders, $body);
             $this->applyContext($options);
 
             return $this->client->sendRequest($request);
@@ -180,9 +139,6 @@ class HttpClient
         }
     }
 
-    /**
-     * 规范化请求头
-     */
     protected function normalizeHeaders(array $headers): array
     {
         $normalized = [];
@@ -195,9 +151,6 @@ class HttpClient
         return $normalized;
     }
 
-    /**
-     * 根据负载推断内容类型
-     */
     protected function detectContentType(mixed $data): string
     {
         if (is_array($data) || $data instanceof \JsonSerializable || $data instanceof \stdClass) {
@@ -207,9 +160,6 @@ class HttpClient
         return 'application/x-www-form-urlencoded';
     }
 
-    /**
-     * 并发发起多个 HTTP 请求
-     */
     #[FiberSafe]
     public function concurrent(array $requests, int $concurrency = 5, float $timeout = 30, bool $failOnError = true): array
     {
@@ -270,20 +220,14 @@ class HttpClient
         ];
     }
 
-    /**
-     * 应用请求上下文配置
-     */
     protected function applyContext(array $options): void
     {
-        if (isset($options['timeout'])) {
-            HttpContext::setTimeout((float) $options['timeout']);
+        if (isset($options['timeout']) && class_exists(\Kode\HttpClient\Context\Context::class)) {
+            \Kode\HttpClient\Context\Context::setTimeout((float) $options['timeout']);
         }
     }
 
-    /**
-     * 获取底层 HTTP 客户端
-     */
-    public function getClient(): BaseHttpClient
+    public function getClient()
     {
         return $this->client;
     }
