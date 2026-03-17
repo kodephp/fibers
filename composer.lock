@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "3e18ee3931a2d176970c7cf55522900f",
+    "content-hash": "fee7122e29923481bcf4c988a8daf8c8",
     "packages": [
         {
             "name": "guzzlehttp/psr7",
@@ -125,16 +125,16 @@
         },
         {
             "name": "kode/aop",
-            "version": "2.1.0",
+            "version": "2.2.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/kodephp/aop.git",
-                "reference": "cfdea310ee161dece4e5bea65b244f9b4afe47cb"
+                "reference": "82939968d8da02927d1bf96470e87f972c46070d"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/kodephp/aop/zipball/cfdea310ee161dece4e5bea65b244f9b4afe47cb",
-                "reference": "cfdea310ee161dece4e5bea65b244f9b4afe47cb",
+                "url": "https://api.github.com/repos/kodephp/aop/zipball/82939968d8da02927d1bf96470e87f972c46070d",
+                "reference": "82939968d8da02927d1bf96470e87f972c46070d",
                 "shasum": ""
             },
             "require": {
@@ -177,9 +177,9 @@
             ],
             "support": {
                 "issues": "https://github.com/kodephp/aop/issues",
-                "source": "https://github.com/kodephp/aop/tree/v2.1.0"
+                "source": "https://github.com/kodephp/aop/tree/v2.2.1"
             },
-            "time": "2026-03-13T04:19:52+00:00"
+            "time": "2026-03-17T06:52:19+00:00"
         },
         {
             "name": "kode/attributes",
@@ -429,16 +429,16 @@
         },
         {
             "name": "kode/http-client",
-            "version": "2.2.1",
+            "version": "2.3.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/kodephp/http-client.git",
-                "reference": "3f7204700f8d3948257b6e363318919a76dd3acc"
+                "reference": "bd6a0b88e2eb54a6c95dc5e2021694d9daeebc1e"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/kodephp/http-client/zipball/3f7204700f8d3948257b6e363318919a76dd3acc",
-                "reference": "3f7204700f8d3948257b6e363318919a76dd3acc",
+                "url": "https://api.github.com/repos/kodephp/http-client/zipball/bd6a0b88e2eb54a6c95dc5e2021694d9daeebc1e",
+                "reference": "bd6a0b88e2eb54a6c95dc5e2021694d9daeebc1e",
                 "shasum": ""
             },
             "require": {
@@ -455,14 +455,16 @@
             },
             "suggest": {
                 "amphp/http-client": "用于 Amp 异步 HTTP 客户端驱动",
+                "ext-curl": "用于 Curl 和 Fiber 驱动",
                 "ext-swoole": "用于 Swoole 协程支持",
                 "ext-swow": "用于 Swow 协程支持",
-                "guzzlehttp/psr7": "用于 PSR-7 消息实现"
+                "guzzlehttp/psr7": "用于 PSR-7 消息实现",
+                "kode/fibers": "用于 Fiber 协程池和调度器"
             },
             "type": "library",
             "extra": {
                 "branch-alias": {
-                    "dev-main": "2.2.x-dev"
+                    "dev-main": "2.3.x-dev"
                 }
             },
             "autoload": {
@@ -491,6 +493,7 @@
                 "http",
                 "middleware",
                 "php8",
+                "php85",
                 "psr-18",
                 "psr-7",
                 "swoole",
@@ -500,7 +503,7 @@
                 "issues": "https://github.com/kodephp/http-client/issues",
                 "source": "https://github.com/kodephp/http-client"
             },
-            "time": "2026-03-13T02:29:47+00:00"
+            "time": "2026-03-13T14:45:27+00:00"
         },
         {
             "name": "psr/container",
@@ -1737,16 +1740,16 @@
         },
         {
             "name": "sebastian/environment",
-            "version": "8.0.3",
+            "version": "8.0.4",
             "source": {
                 "type": "git",
                 "url": "https://github.com/sebastianbergmann/environment.git",
-                "reference": "24a711b5c916efc6d6e62aa65aa2ec98fef77f68"
+                "reference": "7b8842c2d8e85d0c3a5831236bf5869af6ab2a11"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sebastianbergmann/environment/zipball/24a711b5c916efc6d6e62aa65aa2ec98fef77f68",
-                "reference": "24a711b5c916efc6d6e62aa65aa2ec98fef77f68",
+                "url": "https://api.github.com/repos/sebastianbergmann/environment/zipball/7b8842c2d8e85d0c3a5831236bf5869af6ab2a11",
+                "reference": "7b8842c2d8e85d0c3a5831236bf5869af6ab2a11",
                 "shasum": ""
             },
             "require": {
@@ -1789,7 +1792,7 @@
             "support": {
                 "issues": "https://github.com/sebastianbergmann/environment/issues",
                 "security": "https://github.com/sebastianbergmann/environment/security/policy",
-                "source": "https://github.com/sebastianbergmann/environment/tree/8.0.3"
+                "source": "https://github.com/sebastianbergmann/environment/tree/8.0.4"
             },
             "funding": [
                 {
@@ -1809,7 +1812,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2025-08-12T14:11:56+00:00"
+            "time": "2026-03-15T07:05:40+00:00"
         },
         {
             "name": "sebastian/exporter",

@@ -4,8 +4,8 @@
 # IDE
 /.idea/
 /.vscode/
-/.trae
-/.cursor
+/.trae/
+/.cursor/
 
 # Build
 /bin/
@@ -19,3 +19,4 @@
 # OS
 .DS_Store
 Thumbs.db
+composer.lock
