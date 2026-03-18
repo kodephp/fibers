@@ -3,7 +3,7 @@
     "description": "高性能 Fiber 线程池与协程调度器",
     "type": "library",
     "license": "Apache-2.0",
-    "version": "2.11.1",
+    "version": "2.12.0",
     "authors": [
         {
             "name": "Kode Team",
@@ -12,21 +12,18 @@
     ],
     "require": {
         "php": "^8.1",
-        "kode/context": "^2.1"
-    },
-    "require-dev": {
-        "phpunit/phpunit": "^12.5",
         "guzzlehttp/psr7": "^2.8",
+        "kode/context": "^2.1",
+        "kode/aop": "^2.0",
+        "kode/attributes": "^1.0",
         "kode/facade": "^2.0",
         "kode/http-client": "^2.1",
         "kode/console": "^2.1"
     },
+    "require-dev": {
+        "phpunit/phpunit": "^12.5"
+    },
     "suggest": {
-        "guzzlehttp/psr7": "用于 HTTP 客户端请求构建",
-        "kode/facade": "用于 Facade 模式支持",
-        "kode/http-client": "用于 Fiber-safe HTTP 客户端",
-        "kode/console": "用于命令行工具支持",
-        "kode/aop": "用于 AOP 切面编程支持",
         "ext-curl": "用于 HTTP 客户端 cURL 驱动",
         "ext-swoole": "用于 Swoole 协程支持",
         "ext-swow": "用于 Swow 协程支持"
