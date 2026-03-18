@@ -726,6 +726,50 @@ php vendor/bin/fibers diagnose --help
 
 ***
 
+## 🔄 自动降级机制
+
+`kode/fibers` 支持**智能降级**，根据已安装的依赖包自动选择最佳实现：
+
+### 安装方式
+
+```bash
+# 最小安装（仅核心功能，使用原生实现）
+composer require kode/fibers
+
+# 完整安装（推荐，使用增强包实现）
+composer require kode/fibers kode/http-client guzzlehttp/psr7 kode/console kode/facade
+```
+
+### 功能对比
+
+| 功能 | 最小安装 | 完整安装 |
+|------|---------|---------|
+| **核心 Fiber API** | ✅ 完整支持 | ✅ 完整支持 |
+| **HTTP 客户端** | 原生 cURL | kode/http-client + PSR-7 |
+| **命令行工具** | 基础输出 | kode/console 完整功能 |
+| **Facade 模式** | 基础静态代理 | kode/facade 完整功能 |
+| **上下文传递** | ✅ 完整支持 | ✅ 完整支持 |
+| **连接池** | ✅ 完整支持 | ✅ 完整支持 |
+
+### 使用示例
+
+```php
+use Kode\Fibers\HttpClient\HttpClient;
+
+// 自动选择最佳驱动
+$client = new HttpClient();
+$response = $client->get('https://api.example.com');
+
+// 检查当前使用的驱动
+if ($client->isUsingNativeDriver()) {
+    echo "使用原生 cURL 驱动（无需额外依赖）";
+} else {
+    echo "使用 kode/http-client 包驱动（功能更完整）";
+}
+```
+
+***
+
 ## 🧩 功能实现状态
 
 ### ✅ 已实现功能
@@ -759,12 +803,6 @@ php vendor/bin/fibers diagnose --help
 
 ***
 
-## 📄 许可证
-
-Apache 2.0 License. See [LICENSE](./LICENSE) for full text.
-
-***
-
 ## 🙌 贡献者
 
 欢迎提交 PR！请确保：
@@ -779,18 +817,3 @@ Apache 2.0 License. See [LICENSE](./LICENSE) for full text.
 > 🌐 <https://github.com/Kode-php/fibers>
 
 ***
-
-✅ **已完成目标清单：**
-
-| 要求                     | 完成情况 |
-| ---------------------- | ---- |
-| PHP 8.1+ 支持 & 8.4 析构兼容 | ✅    |
-| 纤程池 + CPU 感知           | ✅    |
-| 多框架配置生成                | ✅    |
-| 原生注解 + IDE 识别          | ✅    |
-| README 使用说明详尽          | ✅    |
-| 禁用函数检测                 | ✅    |
-| 通信、队列、IO、超时等           | ✅    |
-
-***
-
