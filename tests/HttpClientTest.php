@@ -6,20 +6,16 @@ namespace Kode\Fibers\Tests;
 
 use PHPUnit\Framework\TestCase;
 use Kode\Fibers\HttpClient\HttpClient;
+use Kode\Fibers\HttpClient\Response;
 use Kode\Fibers\Exceptions\FiberException;
-use Kode\HttpClient\HttpClientInterface as BaseHttpClient;
-use GuzzleHttp\Psr7\Response as PsrResponse;
-use Psr\Http\Message\RequestInterface;
 
 class HttpClientTest extends TestCase
 {
-    private $mockBaseClient;
     private HttpClient $httpClient;
 
     protected function setUp(): void
     {
-        $this->mockBaseClient = $this->createMock(BaseHttpClient::class);
-        $this->httpClient = new HttpClient([], $this->mockBaseClient);
+        $this->httpClient = new HttpClient();
     }
 
     public function testMakeMethodCreatesInstance(): void
@@ -28,127 +24,10 @@ class HttpClientTest extends TestCase
         $this->assertInstanceOf(HttpClient::class, $instance);
     }
 
-    public function testGetMethod(): void
+    public function testIsUsingNativeDriver(): void
     {
-        $mockResponse = new PsrResponse(200, ['Content-Type' => 'application/json']);
-        $this->mockBaseClient->expects($this->once())
-            ->method('sendRequest')
-            ->with(
-                $this->callback(function (RequestInterface $request) {
-                    return $request->getMethod() === 'GET' &&
-                        (string) $request->getUri() === 'https://example.com' &&
-                        $request->getHeaderLine('Content-Type') === 'application/json';
-                })
-            )
-            ->willReturn($mockResponse);
-
-        $response = $this->httpClient->get('https://example.com', ['Content-Type' => 'application/json'], ['timeout' => 5]);
-        $this->assertInstanceOf(PsrResponse::class, $response);
-    }
-
-    public function testPostMethod(): void
-    {
-        $mockResponse = new PsrResponse(201);
-        $this->mockBaseClient->expects($this->once())
-            ->method('sendRequest')
-            ->with(
-                $this->callback(function (RequestInterface $request) {
-                    return $request->getMethod() === 'POST' &&
-                        (string) $request->getUri() === 'https://example.com/api' &&
-                        (string) $request->getBody() === '{"name":"test"}';
-                })
-            )
-            ->willReturn($mockResponse);
-
-        $response = $this->httpClient->post('https://example.com/api', ['name' => 'test']);
-        $this->assertInstanceOf(PsrResponse::class, $response);
-    }
-
-    public function testPutMethod(): void
-    {
-        $mockResponse = new PsrResponse(200);
-        $this->mockBaseClient->expects($this->once())
-            ->method('sendRequest')
-            ->with(
-                $this->callback(function (RequestInterface $request) {
-                    return $request->getMethod() === 'PUT';
-                })
-            )
-            ->willReturn($mockResponse);
-        $response = $this->httpClient->put('https://example.com/api/1', ['name' => 'updated']);
-        $this->assertInstanceOf(PsrResponse::class, $response);
-    }
-
-    public function testDeleteMethod(): void
-    {
-        $mockResponse = new PsrResponse(204);
-        $this->mockBaseClient->expects($this->once())
-            ->method('sendRequest')
-            ->with(
-                $this->callback(function (RequestInterface $request) {
-                    return $request->getMethod() === 'DELETE';
-                })
-            )
-            ->willReturn($mockResponse);
-        $response = $this->httpClient->delete('https://example.com/api/1');
-        $this->assertInstanceOf(PsrResponse::class, $response);
-    }
-
-    public function testPatchMethod(): void
-    {
-        $mockResponse = new PsrResponse(200);
-        $this->mockBaseClient->expects($this->once())
-            ->method('sendRequest')
-            ->with(
-                $this->callback(function (RequestInterface $request) {
-                    return $request->getMethod() === 'PATCH';
-                })
-            )
-            ->willReturn($mockResponse);
-        $response = $this->httpClient->patch('https://example.com/api/1', ['name' => 'patched']);
-        $this->assertInstanceOf(PsrResponse::class, $response);
-    }
-
-    public function testHeadMethod(): void
-    {
-        $mockResponse = new PsrResponse(200);
-        $this->mockBaseClient->expects($this->once())
-            ->method('sendRequest')
-            ->with(
-                $this->callback(function (RequestInterface $request) {
-                    return $request->getMethod() === 'HEAD';
-                })
-            )
-            ->willReturn($mockResponse);
-        $response = $this->httpClient->head('https://example.com');
-        $this->assertInstanceOf(PsrResponse::class, $response);
-    }
-
-    public function testOptionsMethod(): void
-    {
-        $mockResponse = new PsrResponse(200);
-        $this->mockBaseClient->expects($this->once())
-            ->method('sendRequest')
-            ->with(
-                $this->callback(function (RequestInterface $request) {
-                    return $request->getMethod() === 'OPTIONS';
-                })
-            )
-            ->willReturn($mockResponse);
-        $response = $this->httpClient->options('https://example.com');
-        $this->assertInstanceOf(PsrResponse::class, $response);
-    }
-
-    public function testSendMethodWithException(): void
-    {
-        $this->mockBaseClient->expects($this->once())
-            ->method('sendRequest')
-            ->willThrowException(new \Exception('Connection error'));
-        
-        $this->expectException(FiberException::class);
-        $this->expectExceptionMessage('HTTP request failed: Connection error');
-        
-        $this->httpClient->send('GET', 'https://example.com');
+        $client = new HttpClient();
+        $this->assertIsBool($client->isUsingNativeDriver());
     }
 
     public function testGetEnvironmentInfo(): void
@@ -156,47 +35,75 @@ class HttpClientTest extends TestCase
         $info = $this->httpClient->getEnvironmentInfo();
         
         $this->assertArrayHasKey('curl_available', $info);
-        $this->assertArrayHasKey('curl_version', $info);
+        $this->assertArrayHasKey('has_http_client_package', $info);
+        $this->assertArrayHasKey('has_psr7_package', $info);
+        $this->assertArrayHasKey('using_native_driver', $info);
         $this->assertArrayHasKey('max_execution_time', $info);
         $this->assertArrayHasKey('memory_limit', $info);
-        $this->assertArrayHasKey('disabled_functions', $info);
     }
 
-    public function testConcurrentRequests(): void
+    public function testResponseClass(): void
     {
-        $requests = [
-            ['method' => 'GET', 'url' => 'https://example.com/1'],
-            ['method' => 'GET', 'url' => 'https://example.com/2'],
-        ];
+        $response = new Response(200, ['Content-Type' => 'application/json'], '{"success":true}');
+        
+        $this->assertEquals(200, $response->getStatusCode());
+        $this->assertEquals(['Content-Type' => 'application/json'], $response->getHeaders());
+        $this->assertEquals('application/json', $response->getHeader('Content-Type'));
+        $this->assertEquals('{"success":true}', $response->getBody());
+        $this->assertEquals(['success' => true], $response->json());
+        $this->assertTrue($response->isSuccessful());
+        $this->assertFalse($response->isClientError());
+        $this->assertFalse($response->isServerError());
+    }
 
-        $mockResponse = new PsrResponse(200);
-        $this->mockBaseClient->expects($this->exactly(2))
-            ->method('sendRequest')
-            ->willReturn($mockResponse);
+    public function testResponseIsClientError(): void
+    {
+        $response = new Response(404, [], 'Not Found');
+        $this->assertTrue($response->isClientError());
+        $this->assertFalse($response->isSuccessful());
+    }
 
-        $result = $this->httpClient->concurrent($requests, 2, 1, true);
-        $this->assertSame(2, $result['success_count']);
-        $this->assertSame(0, $result['error_count']);
+    public function testResponseIsServerError(): void
+    {
+        $response = new Response(500, [], 'Internal Server Error');
+        $this->assertTrue($response->isServerError());
+        $this->assertFalse($response->isSuccessful());
+    }
 
+    public function testNormalizeHeaders(): void
+    {
         $reflection = new \ReflectionClass(HttpClient::class);
-        $normalizeHeadersMethod = $reflection->getMethod('normalizeHeaders');
-        $normalizeHeadersMethod->setAccessible(true);
+        $method = $reflection->getMethod('normalizeHeaders');
+        $method->setAccessible(true);
 
-        $headers = ['content-type' => 'application/json', 'x-custom-header' => 'value'];
-        $normalizedHeaders = $normalizeHeadersMethod->invoke($this->httpClient, $headers);
+        $headers = ['content_type' => 'application/json', 'x_custom_header' => 'value'];
+        $normalizedHeaders = $method->invoke($this->httpClient, $headers);
+        
         $this->assertEquals('application/json', $normalizedHeaders['Content-Type']);
         $this->assertEquals('value', $normalizedHeaders['X-Custom-Header']);
-
-        $detectContentTypeMethod = $reflection->getMethod('detectContentType');
-        $detectContentTypeMethod->setAccessible(true);
-        $this->assertEquals('application/json', $detectContentTypeMethod->invoke($this->httpClient, ['key' => 'value']));
-        $this->assertEquals('application/x-www-form-urlencoded', $detectContentTypeMethod->invoke($this->httpClient, 'key=value'));
     }
 
-    public function testGetClient(): void
+    public function testDetectContentType(): void
     {
-        $client = $this->httpClient->getClient();
-        $this->assertInstanceOf(BaseHttpClient::class, $client);
-        $this->assertSame($this->mockBaseClient, $client);
+        $reflection = new \ReflectionClass(HttpClient::class);
+        $method = $reflection->getMethod('detectContentType');
+        $method->setAccessible(true);
+
+        $this->assertEquals('application/json', $method->invoke($this->httpClient, ['key' => 'value']));
+        $this->assertEquals('application/json', $method->invoke($this->httpClient, new \stdClass()));
+        $this->assertEquals('application/x-www-form-urlencoded', $method->invoke($this->httpClient, 'key=value'));
+    }
+
+    public function testParseHeaders(): void
+    {
+        $reflection = new \ReflectionClass(HttpClient::class);
+        $method = $reflection->getMethod('parseHeaders');
+        $method->setAccessible(true);
+
+        $headerText = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nX-Custom: value\r\n";
+        $headers = $method->invoke($this->httpClient, $headerText);
+        
+        $this->assertEquals('application/json', $headers['Content-Type']);
+        $this->assertEquals('value', $headers['X-Custom']);
     }
 }

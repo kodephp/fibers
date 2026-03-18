@@ -4,178 +4,66 @@ declare(strict_types=1);
 
 namespace Kode\Fibers\HttpClient;
 
-use Kode\Fibers\Attributes\FiberSafe;
-use Psr\Http\Message\ResponseInterface;
-
 /**
- * Fiber-safe HTTP response wrapper
+ * HTTP 响应类
  *
- * This class provides fiber-aware methods for working with HTTP responses.
+ * 统一的 HTTP 响应封装，兼容 PSR-7 和原生实现
  */
 class Response
 {
-    /**
-     * 底层 PSR-7 响应对象
-     */
-    protected ResponseInterface $response;
+    protected int $statusCode;
+    protected array $headers;
+    protected string $body;
 
-    /**
-     * Create a new fiber HTTP response instance
-     *
-     * @param ResponseInterface $response The underlying response
-     */
-    public function __construct(ResponseInterface $response)
+    public function __construct(int $statusCode, array $headers, string $body)
     {
-        $this->response = $response;
+        $this->statusCode = $statusCode;
+        $this->headers = $headers;
+        $this->body = $body;
     }
 
-    /**
-     * Create a new fiber HTTP response instance
-     *
-     * @param ResponseInterface $response The underlying response
-     * @return static
-     */
-    public static function make(ResponseInterface $response): static
+    public function getStatusCode(): int
     {
-        return new static($response);
+        return $this->statusCode;
     }
 
-    /**
-     * Get the HTTP status code
-     *
-     * @return int
-     */
-    #[FiberSafe]
-    public function statusCode(): int
+    public function getHeaders(): array
     {
-        return $this->response->getStatusCode();
+        return $this->headers;
     }
 
-    /**
-     * Get the HTTP status message
-     *
-     * @return string
-     */
-    #[FiberSafe]
-    public function statusMessage(): string
+    public function getHeader(string $name): ?string
     {
-        return $this->response->getReasonPhrase();
+        return $this->headers[$name] ?? null;
     }
 
-    /**
-     * Get the response body
-     *
-     * @return string
-     */
-    #[FiberSafe]
-    public function body(): string
+    public function getBody(): string
     {
-        return (string) $this->response->getBody();
+        return $this->body;
     }
 
-    /**
-     * Get the response body as JSON
-     *
-     * @param bool $assoc Return associative array instead of object
-     * @return mixed
-     */
-    #[FiberSafe]
-    public function json(bool $assoc = true): mixed
+    public function json(): mixed
     {
-        return json_decode($this->body(), $assoc);
+        return json_decode($this->body, true);
     }
 
-    /**
-     * Get all response headers
-     *
-     * @return array
-     */
-    #[FiberSafe]
-    public function headers(): array
-    {
-        return $this->response->getHeaders();
-    }
-
-    /**
-     * Get a specific response header
-     *
-     * @param string $name The header name
-     * @param mixed $default Default value if header not found
-     * @return mixed
-     */
-    #[FiberSafe]
-    public function header(string $name, mixed $default = null): mixed
-    {
-        $headers = $this->headers();
-        $name = strtolower($name);
-        
-        foreach ($headers as $key => $value) {
-            if (strtolower($key) === $name) {
-                return is_array($value) && count($value) === 1 ? $value[0] : $value;
-            }
-        }
-        
-        return $default;
-    }
-
-    /**
-     * Check if the response is successful (status code 2xx)
-     *
-     * @return bool
-     */
-    #[FiberSafe]
     public function isSuccessful(): bool
     {
-        $code = $this->statusCode();
-        return $code >= 200 && $code < 300;
+        return $this->statusCode >= 200 && $this->statusCode < 300;
     }
 
-    /**
-     * Check if the response is a redirect (status code 3xx)
-     *
-     * @return bool
-     */
-    #[FiberSafe]
-    public function isRedirect(): bool
+    public function isClientError(): bool
     {
-        $code = $this->statusCode();
-        return $code >= 300 && $code < 400;
+        return $this->statusCode >= 400 && $this->statusCode < 500;
     }
 
-    /**
-     * Check if the response indicates an error (status code 4xx or 5xx)
-     *
-     * @return bool
-     */
-    #[FiberSafe]
-    public function isError(): bool
+    public function isServerError(): bool
     {
-        $code = $this->statusCode();
-        return $code >= 400;
+        return $this->statusCode >= 500;
     }
 
-    /**
-     * Get the content type of the response
-     *
-     * @return string
-     */
-    #[FiberSafe]
-    public function contentType(): string
+    public function __toString(): string
     {
-        $contentType = $this->header('content-type', '');
-        if (strpos($contentType, ';') !== false) {
-            return trim(explode(';', $contentType)[0]);
-        }
-        return $contentType;
-    }
-
-    /**
-     * Get the underlying HTTP response
-     *
-     * @return ResponseInterface
-     */
-    public function getResponse(): ResponseInterface
-    {
-        return $this->response;
+        return $this->body;
     }
 }
