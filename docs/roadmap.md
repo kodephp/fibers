@@ -1,6 +1,6 @@
 # 路线图（Roadmap）
 
-## 2.11.x 已完成
+## 2.12.x 已完成
 
 - ✅ 便捷 API：`go`、`withContext`、`batch`
 - ✅ 容错批处理：`resilientBatch`
@@ -11,15 +11,16 @@
 - ✅ 运行时桥接：`RuntimeBridge` 支持 Swoole/OpenSwoole/Swow/Workerman
 - ✅ ORM 适配层：`EloquentAdapter`、`FixturesAdapter`
 - ✅ 热重载支持：`HotReloader` 不中断服务更新代码
-- ✅ 可视化管理界面：`WebUI` Web UI 管理纤程池和任务（合并ProfilerDashboard）
+- ✅ 可视化管理界面：`WebUI` Web UI 管理纤程池和任务
 - ✅ 更多框架支持：Lumen、Hyperf、Webman 服务提供者
 - ✅ 连接池支持：`ConnectionPool` 支持 PDO、Redis 连接池
 - ✅ 协程调试器：`FiberDebugger` 支持断点、日志、状态监控
 - ✅ PHP 8.5 特性支持：`Php85Features` 自动适配新特性
-- ✅ **自动降级机制**：无依赖时使用原生实现，有依赖时使用包功能
-- ✅ **依赖优化**：核心依赖仅 `kode/context`，其他为可选依赖
+- ✅ 自动降级机制：无依赖时使用原生实现，有依赖时使用包功能
+- ✅ 依赖优化：完整功能包在 require 中，Composer 自动去重
+- ✅ FiberPool 架构优化：修复连接池复用逻辑问题
 
-## 2.12.x 计划
+## 2.13.x 计划
 
 - 分布式调度执行层增强（任务回执、重试转移）
 - 断路器策略扩展（按异常类型与服务维度）

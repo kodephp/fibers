@@ -358,32 +358,32 @@ class FiberPool
      */
     protected function getFiber(): Fiber
     {
-        // 执行垃圾回收
         $this->gc();
         
-        // 检查是否可以创建新的纤程
-        if (count($this->running) >= $this->size) {
-            // 如果池已满，检查是否有可用的纤程
-            if (!empty($this->available)) {
-                // 从可用队列中移除一个纤程（不直接重用）
-                array_pop($this->available);
-            } else {
-                throw new RuntimeException('Fiber pool is full');
+        while (!empty($this->available)) {
+            $fiber = array_pop($this->available);
+            if (!$fiber->isTerminated()) {
+                $this->running[spl_object_id($fiber)] = $fiber;
+                if ($this->config['onCreate']) {
+                    ($this->config['onCreate'])(spl_object_id($fiber));
+                }
+                return $fiber;
+            }
+            if ($this->config['onDestroy']) {
+                ($this->config['onDestroy'])(spl_object_id($fiber));
             }
         }
         
-        // 总是创建新的纤程实例，避免重用可能有状态问题的纤程
-        $fiber = $this->createFiber();
-        
-        // 记录正在运行的纤程
-        $this->running[spl_object_id($fiber)] = $fiber;
-        
-        // 触发创建事件
-        if ($this->config['onCreate']) {
-            ($this->config['onCreate'])(spl_object_id($fiber));
+        if (count($this->running) < $this->size) {
+            $fiber = $this->createFiber();
+            $this->running[spl_object_id($fiber)] = $fiber;
+            if ($this->config['onCreate']) {
+                ($this->config['onCreate'])(spl_object_id($fiber));
+            }
+            return $fiber;
         }
         
-        return $fiber;
+        throw new RuntimeException('Fiber pool is full');
     }
 
     /**
@@ -424,16 +424,18 @@ class FiberPool
             unset($this->running[$id]);
         }
         
-        // 重置Fiber状态
-        if (!$fiber->isTerminated()) {
-            try {
-                $fiber->throw(new FiberException('Fiber was released'));
-            } catch (\Throwable $e) {
-                // 忽略异常
+        if ($fiber->isTerminated()) {
+            if ($this->config['onDestroy']) {
+                ($this->config['onDestroy'])($id);
             }
+            return;
         }
         
-        // 回收利用
+        try {
+            $fiber->throw(new FiberException('Fiber was released'));
+        } catch (\Throwable $e) {
+        }
+        
         if (count($this->available) < $this->size) {
             $this->available[] = $fiber;
         } elseif ($this->config['onDestroy']) {
