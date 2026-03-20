@@ -1,6 +1,6 @@
 {
     "name": "kode/fibers",
-    "description": "高性能 Fiber 线程池与协程调度器",
+    "description": "Kode/Fibers - 高性能 PHP Fiber 协程调度器。提供协程池、上下文传递、分布式调度、断路器、负载均衡、RPC 通信（JSON/gRPC/WebSocket）、分布式事务（2PC/TCC/Saga）、多框架集成等企业级特性。",
     "type": "library",
     "license": "Apache-2.0",
     "version": "3.4.0",
