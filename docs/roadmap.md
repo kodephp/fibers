@@ -1,6 +1,6 @@
 # 路线图（Roadmap）
 
-## 2.12.x 已完成
+## 3.0.x 已完成
 
 - ✅ 便捷 API：`go`、`withContext`、`batch`
 - ✅ 容错批处理：`resilientBatch`
@@ -19,16 +19,18 @@
 - ✅ 自动降级机制：无依赖时使用原生实现，有依赖时使用包功能
 - ✅ 依赖优化：完整功能包在 require 中，Composer 自动去重
 - ✅ FiberPool 架构优化：修复连接池复用逻辑问题
+- ✅ **分布式调度执行层增强**：`EnhancedDistributedScheduler` 任务回执与重试转移
+- ✅ **多维度断路器**：`MultiDimensionalCircuitBreaker` 按异常类型与服务维度
+- ✅ **高级负载均衡**：`AdvancedLoadBalancer` 最小连接、权重策略
+- ✅ **IO_uring 支持**：`IOuringSupport` 高性能异步 I/O 接口
 
-## 2.13.x 计划
-
-- 分布式调度执行层增强（任务回执、重试转移）
-- 断路器策略扩展（按异常类型与服务维度）
-- 负载均衡策略扩展：最小连接、权重策略
-- IO_uring 支持（需要 PHP 扩展支持）
-
-## 3.x 远期计划
+## 3.1.x 计划
 
 - 更多框架支持：RoadRunner、Spiral 等
 - 多框架接入自动化脚手架
-- 原生异步 IO 支持
+- 原生异步 IO 增强
+
+## 远期计划
+
+- 跨语言 RPC 通信
+- 分布式事务支持
