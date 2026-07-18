@@ -121,6 +121,7 @@ class ConnectionPool implements ConnectionPoolInterface
      * @return mixed
      * @throws FiberException
      */
+    #[\Override]
     public function getConnection(): mixed
     {
         $this->stats['total_borrowed']++;
@@ -164,6 +165,7 @@ class ConnectionPool implements ConnectionPoolInterface
      * @param mixed $connection 连接实例
      * @return void
      */
+    #[\Override]
     public function releaseConnection(mixed $connection): void
     {
         $id = $this->getConnectionId($connection);
@@ -193,6 +195,7 @@ class ConnectionPool implements ConnectionPoolInterface
      *
      * @return array
      */
+    #[\Override]
     public function getStatus(): array
     {
         return [
@@ -210,6 +213,7 @@ class ConnectionPool implements ConnectionPoolInterface
      *
      * @return void
      */
+    #[\Override]
     public function close(): void
     {
         foreach ($this->idleConnections as $connection) {

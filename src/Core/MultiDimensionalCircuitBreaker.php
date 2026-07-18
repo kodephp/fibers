@@ -16,18 +16,21 @@ use Kode\Fibers\Contracts\CircuitBreakerInterface;
  */
 class MultiDimensionalCircuitBreaker implements CircuitBreakerInterface
 {
-    public const STATE_CLOSED = 'closed';
-    public const STATE_OPEN = 'open';
-    public const STATE_HALF_OPEN = 'half_open';
+    /** 状态：已闭合（正常放行） */
+    public const string STATE_CLOSED = 'closed';
+    /** 状态：已断开（快速失败） */
+    public const string STATE_OPEN = 'open';
+    /** 状态：半开（试探性放行） */
+    public const string STATE_HALF_OPEN = 'half_open';
 
     protected string $state = self::STATE_CLOSED;
     protected ?float $openedAt = null;
     protected int $halfOpenCalls = 0;
-    
+
     protected int $totalSuccesses = 0;
     protected int $totalFailures = 0;
     protected float $lastStateChange = 0;
-    
+
     protected array $exceptionBreakers = [];
     protected array $serviceBreakers = [];
     protected array $config;
@@ -45,6 +48,13 @@ class MultiDimensionalCircuitBreaker implements CircuitBreakerInterface
         ], $config);
     }
 
+    /**
+     * 检查是否允许请求
+     *
+     * @param string|null $service 服务名（可选）
+     * @param string|null $exceptionClass 异常类名（可选）
+     * @return bool
+     */
     public function allowRequest(?string $service = null, ?string $exceptionClass = null): bool
     {
         if ($this->state === self::STATE_CLOSED) {
@@ -67,7 +77,7 @@ class MultiDimensionalCircuitBreaker implements CircuitBreakerInterface
             if ($service !== null && $this->isServiceOpen($service)) {
                 return false;
             }
-            
+
             if ($exceptionClass !== null && $this->isExceptionOpen($exceptionClass)) {
                 return false;
             }
@@ -83,6 +93,13 @@ class MultiDimensionalCircuitBreaker implements CircuitBreakerInterface
         return true;
     }
 
+    /**
+     * 记录成功
+     *
+     * @param string|null $service 服务名（可选）
+     * @param string|null $exceptionClass 异常类名（可选）
+     * @return void
+     */
     public function recordSuccess(?string $service = null, ?string $exceptionClass = null): void
     {
         $this->totalSuccesses++;
@@ -105,6 +122,14 @@ class MultiDimensionalCircuitBreaker implements CircuitBreakerInterface
         }
     }
 
+    /**
+     * 记录失败
+     *
+     * @param string|null $service 服务名（可选）
+     * @param string|null $exceptionClass 异常类名（可选）
+     * @param \Throwable|null $exception 异常实例（可选）
+     * @return void
+     */
     public function recordFailure(
         ?string $service = null,
         ?string $exceptionClass = null,
@@ -134,11 +159,17 @@ class MultiDimensionalCircuitBreaker implements CircuitBreakerInterface
         }
     }
 
+    #[\Override]
     public function state(): string
     {
         return $this->state;
     }
 
+    /**
+     * 重置断路器
+     *
+     * @return void
+     */
     public function reset(): void
     {
         $this->state = self::STATE_CLOSED;
@@ -150,6 +181,7 @@ class MultiDimensionalCircuitBreaker implements CircuitBreakerInterface
         $this->serviceBreakers = [];
     }
 
+    #[\Override]
     public function metrics(): array
     {
         return [

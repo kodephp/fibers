@@ -107,22 +107,27 @@ class EnhancedDistributedScheduler
 
     public function healthyNodes(?string $service = null): array
     {
-        return array_filter($this->nodes, function (array $node) use ($service) {
-            if (!($node['healthy'] ?? true)) {
-                return false;
-            }
-            
-            $circuit = $this->getCircuitBreaker(array_search($node, $this->nodes) ?: '');
-            if ($circuit && $circuit->state() === CircuitBreaker::STATE_OPEN) {
-                return false;
-            }
-            
-            if ($service !== null) {
-                return ($node['services'][$service] ?? false) === true;
-            }
-            
-            return true;
-        });
+        // 使用 ARRAY_FILTER_USE_BOTH 避免在闭包中再做 array_search 反查
+        return array_filter(
+            $this->nodes,
+            function (array $node, string $nodeId) use ($service) {
+                if (!($node['healthy'] ?? true)) {
+                    return false;
+                }
+
+                $circuit = $this->getCircuitBreaker($nodeId);
+                if ($circuit && $circuit->state() === CircuitBreaker::STATE_OPEN) {
+                    return false;
+                }
+
+                if ($service !== null) {
+                    return ($node['services'][$service] ?? false) === true;
+                }
+
+                return true;
+            },
+            ARRAY_FILTER_USE_BOTH
+        );
     }
 
     /**

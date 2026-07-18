@@ -499,6 +499,7 @@ class PersistentTransactionManager extends DistributedTransactionManager
     /**
      * 开始事务
      */
+    #[\Override]
     public function begin(): void
     {
         parent::begin();
@@ -508,6 +509,7 @@ class PersistentTransactionManager extends DistributedTransactionManager
     /**
      * 提交事务
      */
+    #[\Override]
     public function commit(): void
     {
         $this->updateStatus(TransactionRecord::STATUS_COMMITTING);
@@ -518,6 +520,7 @@ class PersistentTransactionManager extends DistributedTransactionManager
     /**
      * 回滚事务
      */
+    #[\Override]
     public function rollback(): void
     {
         $this->updateStatus(TransactionRecord::STATUS_ROLLING_BACK);

@@ -2,7 +2,7 @@
 
 ## 环境要求
 
-- PHP >= 8.1
+- PHP >= 8.3（自 v3.5.0 起最低要求提升至 8.3+，以利用 typed class constants、`#[\Override]`、`json_validate()` 等新特性）
 - 建议启用扩展：`pcntl`、`posix`、`sockets`
 
 ## 安装

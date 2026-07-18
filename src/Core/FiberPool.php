@@ -103,69 +103,74 @@ class FiberPool
      */
     public function run(callable|Runnable|string $task, ?float $timeout = null, array $args = []): mixed
     {
-        // 检查任务类型并转换为Runnable对象
+        // 检查任务类型并转换为 Runnable 对象（在循环外准备，避免重复转换）
         $runnable = $this->prepareTask($task, $args, $timeout);
-        
+
         $maxRetries = $this->config['max_retries'];
         $retryDelay = $this->config['retry_delay'];
         $attempt = 0;
         $startTime = microtime(true);
+        $fiber = null;
 
         while ($attempt <= $maxRetries) {
-            $fiber = $this->getFiber();
-            
             try {
+                $fiber = $this->getFiber();
+
                 // 触发任务开始事件
                 if ($this->config['onTaskStart']) {
                     ($this->config['onTaskStart'])($runnable);
                 }
-                
+
                 $fiber->start($runnable);
-                
+
                 // 等待任务完成
                 while (!$fiber->isTerminated()) {
                     $fiber->resume();
                 }
 
                 $result = $fiber->getReturn();
-                
+
                 // 更新统计信息
                 $this->stats['success']++;
                 $this->stats['total_execution_time'] += microtime(true) - $startTime;
-                
+
                 // 触发任务完成事件
                 if ($this->config['onTaskComplete']) {
                     ($this->config['onTaskComplete'])($runnable, $result);
                 }
-                
+
                 return $result;
             } catch (\Throwable $e) {
                 // 增加失败计数
                 $this->stats['failed']++;
-                
+
                 // 触发任务失败事件
                 if ($this->config['onTaskFail']) {
                     ($this->config['onTaskFail'])($runnable, $e);
                 }
-                
+
                 // 如果达到最大重试次数，抛出异常
                 if ($attempt >= $maxRetries) {
                     throw new FiberException('Task failed after ' . ($maxRetries + 1) . ' attempts: ' . $e->getMessage(), (int)$e->getCode(), $e);
                 }
-                
+
                 // 增加重试计数
                 $attempt++;
                 $this->stats['retries']++;
-                
+
                 // 等待重试延迟
                 if ($retryDelay > 0) {
                     usleep((int)($retryDelay * 1000000));
                 }
             } finally {
-                $this->releaseFiber($fiber);
+                // 确保 fiber 被释放，避免资源泄漏
+                if ($fiber instanceof \Fiber) {
+                    $this->releaseFiber($fiber);
+                    $fiber = null;
+                }
             }
         }
-        
+
         throw new RuntimeException('Task failed after maximum retries');
     }
 
@@ -446,18 +451,21 @@ class FiberPool
     /**
      * 执行垃圾回收
      *
+     * 清理 available 队列中已意外终止的 Fiber，避免复用无效实例。
+     *
      * @return void
      */
     protected function gc(): void
     {
         $this->taskCounter++;
-        
+
         if ($this->taskCounter % $this->config['gc_interval'] === 0) {
-            // 清理已终止的Fiber
-            $this->available = array_filter($this->available, function ($fiber) {
-                return $fiber->isTerminated();
-            });
-            
+            // 仅保留未终止的 Fiber（清理已终止的，避免复用无效实例）
+            $this->available = array_filter(
+                $this->available,
+                static fn(\Fiber $fiber): bool => !$fiber->isTerminated()
+            );
+
             // 内存回收
             gc_collect_cycles();
         }

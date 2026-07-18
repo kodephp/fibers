@@ -15,6 +15,7 @@ class RoundRobinBalancer implements LoadBalancerInterface
 {
     protected int $cursor = 0;
 
+    #[\Override]
     public function nextNode(array $nodes): string|int|null
     {
         if ($nodes === []) {
@@ -28,6 +29,7 @@ class RoundRobinBalancer implements LoadBalancerInterface
         return $keys[$index];
     }
 
+    #[\Override]
     public function distribute(array $items, int $workers): array
     {
         $workers = max(1, $workers);

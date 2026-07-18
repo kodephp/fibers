@@ -1,12 +1,12 @@
 # 🚀 Kode/fibers – 高性能 Fiber 线程池与协程调度器
 
-> 面向 PHP 8.1+ 的高性能 Fiber 纤程客户端，兼容主流框架并提供可降级、可诊断、可扩展的并发执行能力。
+> 面向 PHP 8.3+ 的高性能 Fiber 纤程客户端，兼容主流框架并提供可降级、可诊断、可扩展的并发执行能力。
 
 ***
 
 ## ✅ 特性概览
 
-- ✅ **PHP 8.1+ 原生 Fiber 支持**
+- ✅ **PHP 8.3+ 原生 Fiber 支持**（充分利用 typed constants、`#[\Override]`、`json_validate()` 等新特性）
 - ⚠️ **PHP <8.4 析构函数中禁止切换 Fiber 的自动降级处理**
 - 🧩 **一键启用协程模式（非侵入式）**
 - 🔁 **高性能 Fiber 池 + 自动回收机制**
@@ -17,7 +17,7 @@
 - 🖥️ **CPU 核心感知 + 动态线程池配置**
 - 🔌 **多框架适配：Laravel / Symfony / Yii3 / ThinkPHP8 / Plain PHP**
 - 🛠️ **命令行工具生成配置 & 注册服务**
-- 📝 **原生 PHP 8.1 Attributes + PHPDoc 实现 IDE 完整识别**
+- 📝 **原生 PHP 8.3 Attributes + PHPDoc 实现 IDE 完整识别**
 - 🚫 **禁用函数检测 + 运行环境诊断**
 
 ## 📖 项目背景
@@ -199,9 +199,9 @@ if (PHP_VERSION_ID < 80400) {
 
 | 条件                  | 行为                           |
 | ------------------- | ---------------------------- |
-| PHP < 8.1           | 抛出异常，不支持                     |
-| PHP >= 8.1 && < 8.4 | 启用延迟析构任务队列，安全处理析构中的suspend操作 |
-| PHP >= 8.4          | 正常允许在析构函数中使用suspend操作        |
+| PHP < 8.3           | 抛出异常，不支持（v3.5.0 起最低要求 8.3+）  |
+| PHP >= 8.3 && < 8.4 | 启用延迟析构任务队列，安全处理析构中的suspend操作 |
+| PHP >= 8.4          | 正�常允许在析构函数中使用suspend操作        |
 
 可通过配置关闭严格模式：
 
@@ -405,9 +405,9 @@ $pool = new FiberPool($config['default_pool']);
 $results = $pool->concurrent([...]);
 ```
 
-### ✅ 4. PHP 8.1 原生注解 + IDE 可识别设计
+### ✅ 4. PHP 8.3 原生注解 + IDE 可识别设计
 
-Kode/fibers充分利用PHP 8.1的原生注解功能，提供更好的IDE支持和类型安全：
+Kode/fibers充分利用PHP 8.3的原生注解功能，提供更好的IDE支持和类型安全：
 
 #### 使用 Attribute 实现元数据标记
 
@@ -449,7 +449,7 @@ class Fiber {}
 
 #### 自动类型推断与验证
 
-Kode/fibers通过PHP 8.1的类型系统和注解，可以在开发阶段捕获潜在问题：
+Kode/fibers通过PHP 8.3的类型系统和注解，可以在开发阶段捕获潜在问题：
 
 ```php
 #[FiberSafe]

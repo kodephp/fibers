@@ -83,6 +83,7 @@ class Task implements Runnable
      * @return mixed
      * @throws FiberException If task execution fails
      */
+    #[\Override]
     public function run(): mixed
     {
         try {

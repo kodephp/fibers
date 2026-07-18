@@ -97,6 +97,7 @@ class RetryableTask implements Runnable
      * @return mixed
      * @throws FiberException If task fails after all retries
      */
+    #[\Override]
     public function run(): mixed
     {
         $attempt = 0;
