@@ -542,27 +542,38 @@ class Fibers
         ];
     }
 
-    public static function profilerDashboard(array $records): string
-    {
-        $webUI = new WebUI();
-        return $webUI->renderDashboard();
-    }
-    
     /**
      * 渲染性能分析仪表盘
      *
-     * @param array $records 性能记录
-     * @return string HTML内容
+     * 接收由 {@see Fibers::profile()} 产生的记录数组，构建性能分析器后渲染可视化面板。
+     * 此前该方法会忽略传入的 $records，此处修正为真正使用记录数据。
+     *
+     * @param array $records 性能记录（每条包含 name/status/duration_ms/memory_delta/error 等字段）
+     * @return string HTML 内容
      */
-    public static function profilerRenderDashboard(array $records): string
+    public static function profilerDashboard(array $records): string
     {
         $profiler = new FiberProfiler();
         foreach ($records as $record) {
-            $profiler->profile($record['name'] ?? 'task', fn() => $record);
+            if (!is_array($record)) {
+                continue;
+            }
+            $profiler->profile((string) ($record['name'] ?? 'task'), fn() => $record);
         }
-        
+
         $webUI = new WebUI(['profiler' => $profiler]);
         return $webUI->renderDashboard();
+    }
+
+    /**
+     * 渲染性能分析仪表盘（profilerDashboard 的语义化别名）
+     *
+     * @param array $records 性能记录
+     * @return string HTML 内容
+     */
+    public static function profilerRenderDashboard(array $records): string
+    {
+        return static::profilerDashboard($records);
     }
 
     public static function eloquent(object $connection): EloquentAdapter
