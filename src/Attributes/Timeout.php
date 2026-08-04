@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Kode\Fibers\Attributes;
 
-use Attribute;
-
 /**
  * Timeout 属性 - 设置纤程方法执行超时时间
  *
@@ -25,8 +23,8 @@ use Attribute;
  * }
  * ```
  */
-#[Attribute(Attribute::TARGET_METHOD | Attribute::TARGET_FUNCTION)]
-class Timeout implements Attribute
+#[\Attribute(\Attribute::TARGET_METHOD | \Attribute::TARGET_FUNCTION | \Attribute::TARGET_CLASS)]
+final class Timeout implements Attribute
 {
     /**
      * 超时时间（秒）

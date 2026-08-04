@@ -11,6 +11,10 @@
 # Build
 /bin/
 
+# Local-only changelog (not published to repository)
+/CHANGELOG.md
+/changelog*
+
 # Logs
 /logs/
 /coverage/

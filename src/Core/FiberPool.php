@@ -4,66 +4,57 @@ declare(strict_types=1);
 
 namespace Kode\Fibers\Core;
 
-use Kode\Fibers\Support\CpuInfo;
-use Kode\Fibers\Exceptions\FiberException;
-use Kode\Fibers\Contracts\Runnable;
-use Kode\Fibers\Task\Task;
 use Kode\Context\Context;
-use Kode\Fibers\Fibers;
-use Fiber;
+use Kode\Fibers\Concurrency\CancelledException;
+use Kode\Fibers\Concurrency\Runtime;
+use Kode\Fibers\Concurrency\Scheduler;
+use Kode\Fibers\Concurrency\Semaphore;
+use Kode\Fibers\Contracts\Runnable;
+use Kode\Fibers\Exceptions\FiberException;
+use Kode\Fibers\Support\CpuInfo;
+use Kode\Fibers\Task\Task;
 use RuntimeException;
 
 /**
- * Fiber池 - 管理和复用Fiber实例
+ * Fiber池 - 管理和复用协程执行单元
+ *
+ * v4 起底层由 {@see Scheduler} 事件循环驱动：
+ *
+ * - `concurrent()` 是真并发（任务交错执行），不再是「逐个 resume」的伪并发；
+ * - 超时会真正中断任务，不会出现「超时后任务仍跑完并被重试」的问题；
+ * - `max_retries` 默认改为 0：旧版本默认 3 会让失败任务被静默执行 4 次。
  */
 class FiberPool
 {
     /**
      * 池配置
-     *
-     * @var array
      */
     protected array $config;
 
     /**
-     * 可用的Fiber实例队列
-     *
-     * @var array
-     */
-    protected array $available = [];
-
-    /**
-     * 正在运行的Fiber实例
-     *
-     * @var array
-     */
-    protected array $running = [];
-
-    /**
-     * 池大小
-     *
-     * @var int
+     * 池大小（并发上限）
      */
     protected int $size;
 
     /**
      * 执行任务计数器
-     *
-     * @var int
      */
     protected int $taskCounter = 0;
 
     /**
+     * 当前活跃任务数
+     */
+    protected int $activeCount = 0;
+
+    /**
      * 统计信息
-     *
-     * @var array
      */
     protected array $stats = [
         'success' => 0,
         'failed' => 0,
         'retries' => 0,
         'timeouts' => 0,
-        'total_execution_time' => 0
+        'total_execution_time' => 0,
     ];
 
     /**
@@ -77,7 +68,7 @@ class FiberPool
             'size' => CpuInfo::get() * 4,
             'max_exec_time' => 30,
             'gc_interval' => 100,
-            'max_retries' => 3,
+            'max_retries' => 0,
             'retry_delay' => 1,
             'onCreate' => null,
             'onDestroy' => null,
@@ -86,10 +77,10 @@ class FiberPool
             'onTaskFail' => null,
             'context' => [],
             'name' => 'default',
-            'strict_mode' => true
+            'strict_mode' => true,
         ], $config);
 
-        $this->size = $this->config['size'];
+        $this->size = max(1, (int)$this->config['size']);
     }
 
     /**
@@ -103,224 +94,163 @@ class FiberPool
      */
     public function run(callable|Runnable|string $task, ?float $timeout = null, array $args = []): mixed
     {
-        // 检查任务类型并转换为 Runnable 对象（在循环外准备，避免重复转换）
         $runnable = $this->prepareTask($task, $args, $timeout);
 
-        $maxRetries = $this->config['max_retries'];
-        $retryDelay = $this->config['retry_delay'];
+        $maxRetries = max(0, (int)$this->config['max_retries']);
+        $retryDelay = (float)$this->config['retry_delay'];
         $attempt = 0;
-        $startTime = microtime(true);
-        $fiber = null;
+        $lastError = null;
 
         while ($attempt <= $maxRetries) {
+            if ($attempt > 0) {
+                $this->stats['retries']++;
+
+                if ($retryDelay > 0) {
+                    Runtime::sleep($retryDelay);
+                }
+            }
+
+            $startTime = Scheduler::now();
+            $this->taskCounter++;
+            $this->activeCount++;
+
             try {
-                $fiber = $this->getFiber();
+                $this->fire('onTaskStart', $runnable);
 
-                // 触发任务开始事件
-                if ($this->config['onTaskStart']) {
-                    ($this->config['onTaskStart'])($runnable);
-                }
+                $result = Runtime::execute($this->wrapWithContext($runnable), $timeout);
 
-                $fiber->start($runnable);
-
-                // 等待任务完成
-                while (!$fiber->isTerminated()) {
-                    $fiber->resume();
-                }
-
-                $result = $fiber->getReturn();
-
-                // 更新统计信息
                 $this->stats['success']++;
-                $this->stats['total_execution_time'] += microtime(true) - $startTime;
+                $this->stats['total_execution_time'] += Scheduler::now() - $startTime;
 
-                // 触发任务完成事件
-                if ($this->config['onTaskComplete']) {
-                    ($this->config['onTaskComplete'])($runnable, $result);
-                }
+                $this->fire('onTaskComplete', $runnable, $result);
 
                 return $result;
             } catch (\Throwable $e) {
-                // 增加失败计数
                 $this->stats['failed']++;
 
-                // 触发任务失败事件
-                if ($this->config['onTaskFail']) {
-                    ($this->config['onTaskFail'])($runnable, $e);
+                if ($e instanceof CancelledException) {
+                    $this->stats['timeouts']++;
                 }
 
-                // 如果达到最大重试次数，抛出异常
-                if ($attempt >= $maxRetries) {
-                    throw new FiberException('Task failed after ' . ($maxRetries + 1) . ' attempts: ' . $e->getMessage(), (int)$e->getCode(), $e);
-                }
+                $this->fire('onTaskFail', $runnable, $e);
 
-                // 增加重试计数
+                $lastError = $e;
                 $attempt++;
-                $this->stats['retries']++;
-
-                // 等待重试延迟
-                if ($retryDelay > 0) {
-                    usleep((int)($retryDelay * 1000000));
-                }
             } finally {
-                // 确保 fiber 被释放，避免资源泄漏
-                if ($fiber instanceof \Fiber) {
-                    $this->releaseFiber($fiber);
-                    $fiber = null;
-                }
+                $this->activeCount--;
+                $this->gc();
             }
         }
 
-        throw new RuntimeException('Task failed after maximum retries');
+        throw new FiberException(
+            sprintf('Task failed after %d attempts: %s', $maxRetries + 1, $lastError?->getMessage() ?? 'unknown'),
+            (int)($lastError?->getCode() ?? 0),
+            $lastError
+        );
     }
 
     /**
      * 并行运行多个任务
      *
+     * 失败的任务以 Throwable 形式出现在结果数组中（键与输入一致）。
+     *
      * @param array $tasks 任务数组
-     * @param float|null $timeout 总超时时间（秒）
+     * @param float|null $timeout 单个任务的超时时间（秒）
      * @return array
      * @throws FiberException
      */
     public function concurrent(array $tasks, ?float $timeout = null): array
     {
-        $results = [];
-        $fibers = [];
-        $attempts = []; // 跟踪每个任务的尝试次数
-        $startTimes = []; // 跟踪每个任务的开始时间
-        $totalStartTime = microtime(true);
-        
-        // 初始化任务和尝试次数
+        if ($tasks === []) {
+            return [];
+        }
+
+        $prepared = [];
+
         foreach ($tasks as $key => $task) {
-            $attempts[$key] = 0;
-            $startTimes[$key] = microtime(true);
-            
             try {
-                // 准备任务
                 $runnable = $this->prepareTask($task, [], null);
-                
-                // 触发任务开始事件
-                if ($this->config['onTaskStart']) {
-                    ($this->config['onTaskStart'])($runnable);
-                }
-                
-                $fiber = $this->getFiber();
-                $fiber->start($runnable);
-                $fibers[$key] = [
-                    'fiber' => $fiber,
-                    'task' => $runnable
-                ];
             } catch (\Throwable $e) {
-                $results[$key] = $e;
+                $prepared[$key] = $e;
+
+                continue;
+            }
+
+            $prepared[$key] = $runnable;
+        }
+
+        $wrapped = [];
+        $failures = [];
+
+        foreach ($prepared as $key => $item) {
+            if ($item instanceof \Throwable) {
+                $failures[$key] = $item;
                 $this->stats['failed']++;
+
+                continue;
             }
+
+            $this->fire('onTaskStart', $item);
+
+            $body = $this->wrapWithContext($item);
+            $wrapped[$key] = static fn(): mixed => $body();
         }
-        
-        // 等待所有任务完成、超时或达到最大重试次数
-        while (!empty($fibers)) {
-            // 检查总超时
-            if ($timeout && (microtime(true) - $totalStartTime) > $timeout) {
-                throw new FiberException('Concurrent execution timed out after ' . $timeout . ' seconds');
-            }
-            
-            foreach ($fibers as $key => $item) {
-                $fiber = $item['fiber'];
-                $runnable = $item['task'];
-                
-                if ($fiber->isTerminated()) {
-                    try {
-                        $results[$key] = $fiber->getReturn();
-                        $this->stats['success']++;
-                        $this->stats['total_execution_time'] += microtime(true) - $startTimes[$key];
-                        
-                        // 触发任务完成事件
-                        if ($this->config['onTaskComplete']) {
-                            ($this->config['onTaskComplete'])($runnable, $results[$key]);
-                        }
-                    } catch (\Throwable $e) {
-                        $this->stats['failed']++;
-                        
-                        // 检查是否可以重试
-                        $maxRetries = $this->config['max_retries'];
-                        if ($attempts[$key] < $maxRetries) {
-                            // 增加重试计数
-                            $attempts[$key]++;
-                            $this->stats['retries']++;
-                            
-                            // 等待重试延迟
-                            $retryDelay = $this->config['retry_delay'];
-                            if ($retryDelay > 0) {
-                                usleep((int)($retryDelay * 1000000));
-                            }
-                            
-                            // 重新创建Fiber并启动任务
-                            $this->releaseFiber($fiber);
-                            $newFiber = $this->getFiber();
-                            $newFiber->start($runnable);
-                            $fibers[$key]['fiber'] = $newFiber;
-                            $startTimes[$key] = microtime(true);
-                            continue;
-                        }
-                        
-                        // 达到最大重试次数，记录错误
-                        $results[$key] = $e;
-                        
-                        // 触发任务失败事件
-                        if ($this->config['onTaskFail']) {
-                            ($this->config['onTaskFail'])($runnable, $e);
-                        }
-                    } finally {
-                        $this->releaseFiber($fiber);
-                        unset($fibers[$key]);
-                    }
-                } else {
-                    try {
-                        $fiber->resume();
-                    } catch (\Throwable $e) {
-                        $this->stats['failed']++;
-                        
-                        // 检查是否可以重试
-                        $maxRetries = $this->config['max_retries'];
-                        if ($attempts[$key] < $maxRetries) {
-                            // 增加重试计数
-                            $attempts[$key]++;
-                            $this->stats['retries']++;
-                            
-                            // 等待重试延迟
-                            $retryDelay = $this->config['retry_delay'];
-                            if ($retryDelay > 0) {
-                                usleep((int)($retryDelay * 1000000));
-                            }
-                            
-                            // 重新创建Fiber并启动任务
-                            $this->releaseFiber($fiber);
-                            $newFiber = $this->getFiber();
-                            $newFiber->start($runnable);
-                            $fibers[$key]['fiber'] = $newFiber;
-                            $startTimes[$key] = microtime(true);
-                        } else {
-                            // 达到最大重试次数，记录错误
-                            $results[$key] = $e;
-                            
-                            // 触发任务失败事件
-                            if ($this->config['onTaskFail']) {
-                                ($this->config['onTaskFail'])($runnable, $e);
-                            }
-                            
-                            $this->releaseFiber($fiber);
-                            unset($fibers[$key]);
-                        }
-                    }
+
+        $this->taskCounter += count($wrapped);
+        $started = Scheduler::now();
+
+        $results = Runtime::settleAll($wrapped, $timeout, $this->size);
+
+        foreach ($results as $key => $value) {
+            $runnable = $prepared[$key];
+
+            if ($value instanceof \Throwable) {
+                $this->stats['failed']++;
+
+                if ($value instanceof CancelledException) {
+                    $this->stats['timeouts']++;
                 }
+
+                $this->fire('onTaskFail', $runnable, $value);
+
+                continue;
             }
-            
-            // 让出一点时间给其他进程
-            if (!empty($fibers)) {
-                usleep(100);
-            }
+
+            $this->stats['success']++;
+            $this->fire('onTaskComplete', $runnable, $value);
         }
-        
-        return $results;
+
+        $this->stats['total_execution_time'] += Scheduler::now() - $started;
+
+        // 保持与输入相同的键顺序
+        $ordered = [];
+
+        foreach ($prepared as $key => $_) {
+            $ordered[$key] = $failures[$key] ?? $results[$key] ?? null;
+        }
+
+        return $ordered;
+    }
+
+    /**
+     * 以受限并发批量执行任务，任一任务失败即抛出
+     *
+     * @param array $tasks
+     * @param float|null $timeout
+     * @return array
+     * @throws \Throwable
+     */
+    public function map(array $tasks, ?float $timeout = null): array
+    {
+        return Runtime::all($tasks, $timeout, $this->size);
+    }
+
+    /**
+     * 创建一个受本池并发上限约束的信号量
+     */
+    public function semaphore(): Semaphore
+    {
+        return new Semaphore($this->size);
     }
 
     /**
@@ -333,148 +263,67 @@ class FiberPool
      */
     protected function prepareTask(callable|Runnable|string $task, array $args = [], ?float $timeout = null): Runnable
     {
-        // 如果已经是Runnable对象，直接返回
         if ($task instanceof Runnable) {
             return $task;
         }
-        
-        // 如果是字符串，尝试实例化对应的类
+
         if (is_string($task) && class_exists($task)) {
             if (is_subclass_of($task, Runnable::class)) {
                 return new $task(...$args);
-            } else {
-                throw new RuntimeException(sprintf('Class %s does not implement Runnable interface', $task));
             }
+
+            throw new RuntimeException(sprintf('Class %s does not implement Runnable interface', $task));
         }
-        
-        // 如果是callable，包装成Task对象
+
         if (is_callable($task)) {
             return Task::make($task, ['timeout' => $timeout]);
         }
-        
+
         throw new RuntimeException('Task must be callable or implement Runnable interface');
     }
 
     /**
-     * 获取一个Fiber实例
-     *
-     * @return Fiber
-     * @throws RuntimeException
+     * 用池上下文包装任务
      */
-    protected function getFiber(): Fiber
-    {
-        $this->gc();
-        
-        while (!empty($this->available)) {
-            $fiber = array_pop($this->available);
-            if (!$fiber->isTerminated()) {
-                $this->running[spl_object_id($fiber)] = $fiber;
-                if ($this->config['onCreate']) {
-                    ($this->config['onCreate'])(spl_object_id($fiber));
-                }
-                return $fiber;
-            }
-            if ($this->config['onDestroy']) {
-                ($this->config['onDestroy'])(spl_object_id($fiber));
-            }
-        }
-        
-        if (count($this->running) < $this->size) {
-            $fiber = $this->createFiber();
-            $this->running[spl_object_id($fiber)] = $fiber;
-            if ($this->config['onCreate']) {
-                ($this->config['onCreate'])(spl_object_id($fiber));
-            }
-            return $fiber;
-        }
-        
-        throw new RuntimeException('Fiber pool is full');
-    }
-
-    /**
-     * 创建一个新的Fiber实例
-     *
-     * @return Fiber
-     */
-    protected function createFiber(): Fiber
+    protected function wrapWithContext(Runnable $runnable): \Closure
     {
         $context = $this->config['context'];
-        
-        return new Fiber(function (Runnable $task) use ($context) {
-            try {
-                if (!empty($context)) {
-                    Context::merge($context);
-                }
-                
-                return $task->run();
-            } catch (\Throwable $e) {
-                throw $e;
-            } finally {
-                Context::clear();
+
+        return static function () use ($runnable, $context): mixed {
+            if ($context !== []) {
+                Context::merge($context);
             }
-        });
+
+            return $runnable->run();
+        };
     }
 
     /**
-     * 释放Fiber实例
-     *
-     * @param Fiber $fiber
-     * @return void
+     * 触发生命周期回调
      */
-    protected function releaseFiber(Fiber $fiber): void
+    protected function fire(string $hook, mixed ...$args): void
     {
-        $id = spl_object_id($fiber);
-        
-        if (isset($this->running[$id])) {
-            unset($this->running[$id]);
-        }
-        
-        if ($fiber->isTerminated()) {
-            if ($this->config['onDestroy']) {
-                ($this->config['onDestroy'])($id);
-            }
-            return;
-        }
-        
-        try {
-            $fiber->throw(new FiberException('Fiber was released'));
-        } catch (\Throwable $e) {
-        }
-        
-        if (count($this->available) < $this->size) {
-            $this->available[] = $fiber;
-        } elseif ($this->config['onDestroy']) {
-            ($this->config['onDestroy'])($id);
+        $callback = $this->config[$hook] ?? null;
+
+        if (is_callable($callback)) {
+            $callback(...$args);
         }
     }
 
     /**
-     * 执行垃圾回收
-     *
-     * 清理 available 队列中已意外终止的 Fiber，避免复用无效实例。
-     *
-     * @return void
+     * 周期性内存回收
      */
     protected function gc(): void
     {
-        $this->taskCounter++;
+        $interval = max(1, (int)$this->config['gc_interval']);
 
-        if ($this->taskCounter % $this->config['gc_interval'] === 0) {
-            // 仅保留未终止的 Fiber（清理已终止的，避免复用无效实例）
-            $this->available = array_filter(
-                $this->available,
-                static fn(\Fiber $fiber): bool => !$fiber->isTerminated()
-            );
-
-            // 内存回收
+        if ($this->taskCounter > 0 && $this->taskCounter % $interval === 0) {
             gc_collect_cycles();
         }
     }
 
     /**
      * 获取池配置
-     *
-     * @return array
      */
     public function getConfig(): array
     {
@@ -483,8 +332,6 @@ class FiberPool
 
     /**
      * 获取池大小
-     *
-     * @return int
      */
     public function getSize(): int
     {
@@ -493,28 +340,22 @@ class FiberPool
 
     /**
      * 获取活跃纤程数量
-     *
-     * @return int
      */
     public function getActiveCount(): int
     {
-        return count($this->running);
+        return $this->activeCount;
     }
 
     /**
      * 获取可用纤程数量
-     *
-     * @return int
      */
     public function getAvailableCount(): int
     {
-        return count($this->available);
+        return max(0, $this->size - $this->activeCount);
     }
 
     /**
      * 获取总执行任务数
-     *
-     * @return int
      */
     public function getTotalExecuted(): int
     {
@@ -523,30 +364,24 @@ class FiberPool
 
     /**
      * 获取池名称
-     *
-     * @return string
      */
     public function getName(): string
     {
-        return $this->config['name'];
+        return (string)$this->config['name'];
     }
 
     /**
      * 设置上下文数据
-     *
-     * @param array $context
-     * @return self
      */
     public function setContext(array $context): self
     {
         $this->config['context'] = $context;
+
         return $this;
     }
 
     /**
      * 获取上下文数据
-     *
-     * @return array
      */
     public function getContext(): array
     {
@@ -555,8 +390,6 @@ class FiberPool
 
     /**
      * 获取统计信息
-     *
-     * @return array
      */
     public function getStats(): array
     {
@@ -565,8 +398,6 @@ class FiberPool
 
     /**
      * 重置统计信息
-     *
-     * @return self
      */
     public function resetStats(): self
     {
@@ -575,8 +406,9 @@ class FiberPool
             'failed' => 0,
             'retries' => 0,
             'timeouts' => 0,
-            'total_execution_time' => 0
+            'total_execution_time' => 0,
         ];
+
         return $this;
     }
 }

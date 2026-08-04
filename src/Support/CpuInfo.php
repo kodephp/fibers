@@ -7,6 +7,11 @@ namespace Kode\Fibers\Support;
 class CpuInfo
 {
     /**
+     * CPU 核心数缓存（类级静态，clearCache 可重置）
+     */
+    private static ?int $cachedCount = null;
+
+    /**
      * 获取CPU核心数
      *
      * @param bool $forceRefresh 是否强制刷新缓存
@@ -14,13 +19,10 @@ class CpuInfo
      */
     public static function get(bool $forceRefresh = false): int
     {
-        // 检查是否已经缓存了结果
-        static $cpuCount = null;
-        
-        if ($cpuCount !== null && !$forceRefresh) {
-            return $cpuCount;
+        if (self::$cachedCount !== null && !$forceRefresh) {
+            return self::$cachedCount;
         }
-        
+
         // 尝试不同的方法获取CPU核心数
         if (PHP_OS_FAMILY === 'Windows') {
             // Windows系统
@@ -32,10 +34,12 @@ class CpuInfo
             // Linux/Unix系统
             $cpuCount = self::getCpuCountLinux();
         }
-        
+
         // 确保返回值至少为1
         $cpuCount = max(1, $cpuCount);
-        
+
+        self::$cachedCount = $cpuCount;
+
         return $cpuCount;
     }
     
@@ -150,8 +154,7 @@ class CpuInfo
      */
     public static function clearCache(): void
     {
-        // 通过设置为null来清除静态变量缓存
-        $cpuCount = null;
+        self::$cachedCount = null;
     }
     
     /**

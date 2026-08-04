@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Kode\Fibers\Task;
 
+use Kode\Context\Context;
+use Kode\Fibers\Attributes\FiberSafe;
+use Kode\Fibers\Concurrency\CancelledException;
+use Kode\Fibers\Concurrency\Runtime;
 use Kode\Fibers\Contracts\Runnable;
 use Kode\Fibers\Exceptions\FiberException;
-use Kode\Fibers\Attributes\Timeout;
-use Kode\Fibers\Attributes\FiberSafe;
 
 /**
  * Task class for fiber tasks
@@ -86,18 +88,25 @@ class Task implements Runnable
     #[\Override]
     public function run(): mixed
     {
-        try {
-            // If timeout is set, run with timeout
-            if ($this->timeout !== null) {
-                return TaskRunner::runWithTimeout($this->callable, $this->timeout, $this->context);
+        $body = function (): mixed {
+            if ($this->context !== []) {
+                Context::merge($this->context);
             }
-            
-            // Otherwise run without timeout
-            return call_user_func($this->callable);
+
+            return ($this->callable)();
+        };
+
+        try {
+            return Runtime::execute($body, $this->timeout);
+        } catch (CancelledException $e) {
+            // 超时 / 取消需要保留原始类型，供上层判断是否应当重试
+            throw $e;
+        } catch (FiberException $e) {
+            throw $e;
         } catch (\Throwable $e) {
             throw new FiberException(
-                "Task {$this->id} execution failed: " . $e->getMessage(), 
-                (int)$e->getCode(), 
+                "Task {$this->id} execution failed: " . $e->getMessage(),
+                (int)$e->getCode(),
                 $e
             );
         }

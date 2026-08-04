@@ -163,7 +163,11 @@ class Php85Features
     public static function createCurlHandle(string $url, array $options = []): \CurlHandle
     {
         $ch = curl_init($url);
-        
+
+        if ($ch === false) {
+            throw new \RuntimeException('无法初始化 cURL 句柄: ' . $url);
+        }
+
         $defaultOptions = [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_FOLLOWLOCATION => true,
@@ -171,13 +175,15 @@ class Php85Features
             CURLOPT_TIMEOUT => 30,
             CURLOPT_CONNECTTIMEOUT => 10,
         ];
-        
+
         if (self::isSupported()) {
             $defaultOptions[CURLOPT_HTTP_VERSION] = CURL_HTTP_VERSION_2TLS;
         }
-        
-        curl_setopt_array($ch, array_merge($defaultOptions, $options));
-        
+
+        // 注意：CURLOPT_* 是整数键，array_merge 会重新编号导致选项全部错乱，
+        // 必须使用 `+` 运算符保留键（左侧优先，即调用方选项覆盖默认值）。
+        curl_setopt_array($ch, $options + $defaultOptions);
+
         return $ch;
     }
 

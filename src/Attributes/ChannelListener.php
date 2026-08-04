@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Kode\Fibers\Attributes;
 
-use Attribute;
-
 /**
  * ChannelListener 属性 - 自动注册通道监听器
  *
@@ -30,8 +28,8 @@ use Attribute;
  * }
  * ```
  */
-#[Attribute(Attribute::TARGET_METHOD | Attribute::IS_REPEATABLE)]
-class ChannelListener implements Attribute
+#[\Attribute(\Attribute::TARGET_METHOD | \Attribute::IS_REPEATABLE)]
+final class ChannelListener implements Attribute
 {
     /**
      * 通道名称

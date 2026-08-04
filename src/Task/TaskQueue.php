@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kode\Fibers\Task;
 
 use Kode\Fibers\Contracts\Runnable;
+use Kode\Fibers\Concurrency\Runtime;
 use Kode\Fibers\Exceptions\FiberException;
 use Kode\Fibers\Core\FiberPool;
 use Kode\Fibers\Attributes\FiberSafe;
@@ -132,29 +133,48 @@ class TaskQueue
      */
     protected function process(): void
     {
-        // Process tasks while there are tasks in the queue and slots available in the pool
-        while (!$this->queue->isEmpty() && count($this->runningTasks) < $this->options['concurrency']) {
-            // Get next task
+        if (!$this->running || $this->paused) {
+            return;
+        }
+
+        // 一次性取出当前队列中的全部任务，真正的并发上限交给 Runtime::settleAll
+        // 内部的信号量来控制（旧实现调用 FiberPool::run() 是阻塞式逐个执行，
+        // concurrency 参数被完全忽略，所谓「并发」其实是串行）。
+        $jobs = [];
+        while (!$this->queue->isEmpty()) {
             $queueItem = $this->queue->extract();
             $task = $queueItem['data'];
-            // Generate task ID if needed
             $taskId = $task instanceof Task ? $task->getId() : uniqid('task_', true);
-            
-            // Execute task in the fiber pool
+
             $this->runningTasks[$taskId] = true;
-            
-            $this->pool->run(function () use ($task, $taskId) {
-                try {
-                    // Execute the task
-                    $task->run();
-                } catch (\Throwable $e) {
-                    // Log the exception
-                    $this->handleTaskException($taskId, $e);
-                } finally {
-                    // Remove from running tasks
-                    unset($this->runningTasks[$taskId]);
-                }
-            });
+            $jobs[$taskId] = $task;
+        }
+
+        if ($jobs === []) {
+            return;
+        }
+
+        try {
+            $tasks = [];
+            foreach ($jobs as $taskId => $task) {
+                $tasks[$taskId] = function () use ($taskId, $task): mixed {
+                    try {
+                        return $task->run();
+                    } catch (\Throwable $e) {
+                        $this->handleTaskException($taskId, $e);
+                        throw $e;
+                    } finally {
+                        unset($this->runningTasks[$taskId]);
+                    }
+                };
+            }
+
+            Runtime::settleAll($tasks, null, $this->options['concurrency']);
+        } finally {
+            // 防御性清理：确保任何情况下运行标记都被释放
+            foreach (array_keys($jobs) as $taskId) {
+                unset($this->runningTasks[$taskId]);
+            }
         }
     }
     

@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use Kode\Fibers\Task\Task;
 use Kode\Fibers\Task\RetryableTask;
 use Kode\Fibers\Task\TaskQueue;
+use Kode\Fibers\Concurrency\Runtime;
 use Kode\Fibers\Exceptions\FiberException;
 use Kode\Fibers\Contracts\Runnable;
 
@@ -64,17 +65,20 @@ class TaskTest extends TestCase
     
     /**
      * Test task that exceeds timeout
+     *
+     * 注意：纤维级超时是「协作式真中断」，必须让出执行权才能被调度器感知。
+     * 使用 Runtime::sleep()（会主动让权）而非 usleep()（阻塞 OS 线程，无法被抢占）。
      */
     public function testTaskExceedingTimeout()
     {
         $this->expectException(FiberException::class);
-        $this->expectExceptionMessageMatches('/Task .* exceeded timeout/');
-        
+        $this->expectExceptionMessageMatches('/任务执行超过/');
+
         $task = new Task(function () {
-            usleep(300000); // Sleep for 0.3 seconds
+            Runtime::sleep(0.3);
             return 'This should not be reached';
         }, ['timeout' => 0.1]);
-        
+
         $task->run();
     }
     

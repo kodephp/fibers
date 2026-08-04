@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Kode\Fibers\Async;
 
+use Kode\Fibers\Concurrency\Runtime;
+
 /**
  * 异步 IO 统一接口
  *
@@ -99,6 +101,9 @@ class AsyncIO
             \Swoole\Coroutine::sleep($seconds);
         } elseif ($this->driver === 'swow' && extension_loaded('swow')) {
             \Swow\Coroutine::sleep((int)($seconds * 1000));
+        } else {
+            // 同步回退：真正等待指定时长（旧实现在 stream 驱动下直接跳过，等于没睡眠）
+            usleep((int) round($seconds * 1_000_000));
         }
         $this->defer($callback);
     }
@@ -113,26 +118,16 @@ class AsyncIO
 
     /**
      * 并发执行多个任务
+     *
+     * 通过 {@see Runtime} 在纤维调度器下真正实现并发；任一任务失败即向上抛出，
+     * 与旧版「逐个 defer 同步执行」的语义保持一致（旧实现既没有并发也只是同步跑）。
+     *
+     * @param array<array-key, callable> $tasks
      */
     public function parallel(array $tasks, callable $callback): void
     {
-        $results = [];
-        $pending = count($tasks);
-
-        foreach ($tasks as $key => $task) {
-            $tasks[$key] = function () use ($task, $key, &$results, $callback, &$pending) {
-                $result = $task();
-                $results[$key] = $result;
-                $pending--;
-                if ($pending === 0) {
-                    $callback($results);
-                }
-            };
-        }
-
-        foreach ($tasks as $task) {
-            $this->defer($task);
-        }
+        $results = Runtime::all($tasks);
+        $callback($results);
     }
 
     /**

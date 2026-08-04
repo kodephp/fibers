@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Kode\Fibers\Attributes;
 
-use Attribute;
-
 /**
  * FiberSafe 属性 - 标记方法可在纤程中安全调用
  *
@@ -25,8 +23,8 @@ use Attribute;
  * }
  * ```
  */
-#[Attribute(Attribute::TARGET_METHOD | Attribute::TARGET_CLASS | Attribute::TARGET_FUNCTION)]
-class FiberSafe implements Attribute
+#[\Attribute(\Attribute::TARGET_METHOD | \Attribute::TARGET_CLASS | \Attribute::TARGET_FUNCTION)]
+final class FiberSafe implements Attribute
 {
     /**
      * 是否启用严格模式

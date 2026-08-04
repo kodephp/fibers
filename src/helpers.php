@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 if (!function_exists('env')) {
     /**
      * 获取环境变量值

@@ -4,51 +4,51 @@ declare(strict_types=1);
 
 namespace Kode\Fibers\Task;
 
-use Kode\Fibers\Core\FiberPool;
+use Kode\Context\Context;
+use Kode\Fibers\Concurrency\CancelledException;
+use Kode\Fibers\Concurrency\Runtime;
+use Kode\Fibers\Concurrency\TimeoutException;
 use Kode\Fibers\Contracts\Runnable;
 use Kode\Fibers\Exceptions\FiberException;
-use Kode\Fibers\Attributes\Timeout;
-use Kode\Context\Context;
 
 /**
  * Task runner for fiber tasks
- * 
- * Provides enhanced task execution capabilities including timeout management,
- * retry mechanism, priority tasks, and graceful PHP version compatibility.
+ *
+ * 基于 {@see \Kode\Fibers\Concurrency\Scheduler} 的任务执行入口，提供超时、
+ * 重试、并发、优先级与可取消任务能力。
+ *
+ * 关键行为（v4 起）：
+ * - 超时是「真中断」：到期后任务会在下一个挂起点被取消，而不是跑完再比对耗时；
+ * - 重试与休眠在协程内让出执行权，不再阻塞整个事件循环；
+ * - 取消 / 超时异常保留原始类型，不会被包装成普通 FiberException。
  */
 class TaskRunner
 {
     /**
-     * The threshold for considering a PHP version as supporting safe destruct in fibers
-     */
-    private const PHP_VERSION_WITH_SAFE_DESTRUCT = 80400;
-    
-    /**
      * Run a task
      *
      * @param callable|Runnable $task
-     * @param float|null $timeout
-     * @param array $context Optional context data
+     * @param float|null $timeout 超时秒数
+     * @param array $context 可选上下文数据
      * @return mixed
      * @throws FiberException If task execution fails
      */
     public static function run(callable|Runnable $task, ?float $timeout = null, array $context = []): mixed
     {
+        $body = static function () use ($task, $context): mixed {
+            if ($context !== []) {
+                Context::merge($context);
+            }
+
+            return $task instanceof Runnable ? $task->run() : $task();
+        };
+
         try {
-            if ($timeout !== null) {
-                // Wrap the task with timeout logic
-                return static::runWithTimeout($task, $timeout, $context);
-            }
-
-            // If task is Runnable, call its run method
-            if ($task instanceof Runnable) {
-                return $task->run();
-            }
-
-            // Otherwise directly call the callable
-            return $task();
+            return Runtime::execute($body, $timeout);
+        } catch (CancelledException | FiberException $e) {
+            throw $e;
         } catch (\Throwable $e) {
-            throw new FiberException("Task execution failed: " . $e->getMessage(), (int)$e->getCode(), $e);
+            throw new FiberException('Task execution failed: ' . $e->getMessage(), (int)$e->getCode(), $e);
         }
     }
 
@@ -59,106 +59,88 @@ class TaskRunner
      * @param float $timeout
      * @param array $context Optional context data
      * @return mixed
-     * @throws FiberException If the task exceeds the timeout or fails
+     * @throws TimeoutException 超时
+     * @throws FiberException   任务失败
      */
     public static function runWithTimeout(callable|Runnable $task, float $timeout, array $context = []): mixed
     {
-        $startTime = microtime(true);
-
-        try {
-            if (!empty($context)) {
-                Context::merge($context);
-            }
-
-            $result = $task instanceof Runnable ? $task->run() : $task();
-        } catch (\Throwable $e) {
-            throw new FiberException("Task execution failed: " . $e->getMessage(), 0, $e);
-        } finally {
-            Context::clear();
+        if ($timeout <= 0) {
+            throw new FiberException('超时时间必须大于 0 秒');
         }
 
-        $elapsedTime = microtime(true) - $startTime;
-        if ($elapsedTime > $timeout) {
-            if (PHP_VERSION_ID < self::PHP_VERSION_WITH_SAFE_DESTRUCT) {
-                throw new FiberException(
-                    "Task exceeded timeout of {$timeout} seconds (elapsed: {$elapsedTime}s). " .
-                    "PHP < 8.4 无法强制中断执行中的纤程。"
-                );
-            }
-
-            throw new FiberException("Task exceeded timeout of {$timeout} seconds (elapsed: {$elapsedTime}s)");
-        }
-
-        return $result;
+        return static::run($task, $timeout, $context);
     }
 
     /**
      * Run a task with retry mechanism
      *
      * @param callable|Runnable $task
-     * @param int $maxRetries Maximum number of retries
-     * @param float $retryDelay Delay between retries in seconds
-     * @param ?float $timeout Optional timeout per attempt
+     * @param int $maxRetries 最大重试次数
+     * @param float $retryDelay 重试间隔（秒）
+     * @param ?float $timeout 单次尝试的超时秒数
      * @return mixed
      * @throws FiberException If task fails after all retries
      */
     public static function retry(
-        callable|Runnable $task, 
-        int $maxRetries = 3, 
-        float $retryDelay = 1, 
+        callable|Runnable $task,
+        int $maxRetries = 3,
+        float $retryDelay = 1,
         ?float $timeout = null
     ): mixed {
+        $maxRetries = max(0, $maxRetries);
         $attempt = 0;
         $lastException = null;
-        
+
         while ($attempt <= $maxRetries) {
+            if ($attempt > 0 && $retryDelay > 0) {
+                Runtime::sleep($retryDelay);
+            }
+
             try {
-                $attempt++;
-                
-                if ($attempt > 1) {
-                    // Wait before retrying
-                    usleep((int)($retryDelay * 1000000));
-                }
-                
                 return static::run($task, $timeout);
             } catch (\Throwable $e) {
                 $lastException = $e;
-                
-                // If max retries reached, throw the last exception
-                if ($attempt > $maxRetries) {
-                    throw new FiberException(
-                        "Task failed after {$maxRetries} retries: " . $e->getMessage(), 
-                        (int)$e->getCode(), 
-                        $e
-                    );
-                }
+                $attempt++;
             }
         }
-        
-        // This should never be reached due to the throw in the loop
-        throw new FiberException("Task failed after maximum retries", 0, $lastException);
+
+        throw new FiberException(
+            sprintf('Task failed after %d retries: %s', $maxRetries, $lastException?->getMessage() ?? 'unknown'),
+            (int)($lastException?->getCode() ?? 0),
+            $lastException
+        );
     }
 
     /**
      * Run multiple tasks concurrently
      *
+     * 返回值与输入键一一对应；失败的任务以 Throwable 形式出现在结果中。
+     *
      * @param array $tasks
-     * @param array $options
+     * @param array $options 支持 timeout、concurrency
      * @return array
      * @throws FiberException If concurrent execution fails
      */
     public static function concurrent(array $tasks, array $options = []): array
     {
+        if ($tasks === []) {
+            return [];
+        }
+
+        $timeout = isset($options['timeout']) ? (float)$options['timeout'] : null;
+        $concurrency = isset($options['concurrency']) ? (int)$options['concurrency'] : null;
+
         try {
-            $pool = new FiberPool($options);
-            return $pool->concurrent($tasks);
+            return Runtime::settleAll($tasks, $timeout, $concurrency);
         } catch (\Throwable $e) {
-            throw new FiberException("Concurrent task execution failed: " . $e->getMessage(), 0, $e);
+            throw new FiberException('Concurrent task execution failed: ' . $e->getMessage(), 0, $e);
         }
     }
 
     /**
      * Run tasks with priorities
+     *
+     * 相同优先级的任务并发执行，不同优先级按从小到大依次执行。
      *
      * @param array $priorityTasks Array of [priority => task, ...]
      * @param array $options
@@ -168,21 +150,18 @@ class TaskRunner
     public static function prioritized(array $priorityTasks, array $options = []): array
     {
         try {
-            // Sort tasks by priority (lower number = higher priority)
             ksort($priorityTasks);
-            
-            // Create a fiber pool
-            $pool = new FiberPool($options);
-            
-            // Execute tasks in order of priority
+
+            $timeout = isset($options['timeout']) ? (float)$options['timeout'] : null;
             $results = [];
+
             foreach ($priorityTasks as $priority => $task) {
-                $results[$priority] = $pool->run($task);
+                $results[$priority] = static::run($task, $timeout);
             }
-            
+
             return $results;
         } catch (\Throwable $e) {
-            throw new FiberException("Prioritized task execution failed: " . $e->getMessage(), 0, $e);
+            throw new FiberException('Prioritized task execution failed: ' . $e->getMessage(), 0, $e);
         }
     }
 
@@ -190,123 +169,43 @@ class TaskRunner
      * Create a cancellable task
      *
      * @param callable|Runnable $task
-     * @param callable $cancelCallback Optional callback to be executed when cancelled
-     * @return array [runTask, cancelTask] where runTask is a callable to run the task and cancelTask is a callable to cancel it
+     * @param callable|null $cancelCallback 取消时执行的回调
+     * @return array{runTask: \Closure, cancelTask: \Closure, isCancelled: \Closure}
      */
     public static function cancellable(
         callable|Runnable $task,
         ?callable $cancelCallback = null
     ): array {
         $cancelled = false;
-        $cancelMutex = new TaskMutex();
-        
-        // Wrapped task that checks for cancellation
-        $wrappedTask = function () use ($task, &$cancelled, $cancelMutex) {
-            // Check if cancellation was requested before starting
-            $cancelMutex->lock();
-            $isCancelled = $cancelled;
-            $cancelMutex->unlock();
-            
-            if ($isCancelled) {
-                throw new FiberException("Task was cancelled before execution");
+
+        $wrappedTask = static function () use ($task, &$cancelled): mixed {
+            if ($cancelled) {
+                throw new CancelledException('Task was cancelled before execution');
             }
-            
-            // Execute the task
-            return static::run($task);
+
+            return $task instanceof Runnable ? $task->run() : $task();
         };
-        
-        // Cancel function
-        $cancel = function () use (&$cancelled, $cancelMutex, $cancelCallback) {
-            $cancelMutex->lock();
+
+        $cancel = static function () use (&$cancelled, $cancelCallback): void {
+            if ($cancelled) {
+                return;
+            }
+
             $cancelled = true;
-            $cancelMutex->unlock();
-            
-            // Execute cancel callback if provided
-            if ($cancelCallback) {
+
+            if ($cancelCallback !== null) {
                 try {
                     $cancelCallback();
-                } catch (\Throwable $e) {
-                    // Silently ignore errors in cancel callback
+                } catch (\Throwable) {
+                    // 取消回调中的异常不影响取消动作本身
                 }
             }
         };
-        
-        return [
-            'runTask' => fn(?float $timeout = null) => static::run($wrappedTask, $timeout),
-            'cancelTask' => $cancel
-        ];
-    }
-}
 
-/**
- * 简单的互斥锁实现
- * 
- * 用于在纤程环境中保护共享资源的访问
- */
-class TaskMutex
-{
-    /**
-     * @var bool 锁状态
-     */
-    private bool $locked = false;
-    
-    /**
-     * 加锁
-     * 
-     * @param float|null $timeout 超时时间（秒），null表示无限等待
-     * @return bool 是否成功获取锁
-     */
-    public function lock(?float $timeout = null): bool
-    {
-        $startTime = microtime(true);
-        
-        while (true) {
-            if (!$this->locked) {
-                $this->locked = true;
-                return true;
-            }
-            
-            if ($timeout !== null) {
-                $elapsed = microtime(true) - $startTime;
-                if ($elapsed >= $timeout) {
-                    return false;
-                }
-            }
-            
-            // 让出CPU时间片，避免CPU占用过高
-            usleep(100);
-        }
-    }
-    
-    /**
-     * 尝试获取锁，不阻塞
-     * 
-     * @return bool 是否成功获取锁
-     */
-    public function tryLock(): bool
-    {
-        if (!$this->locked) {
-            $this->locked = true;
-            return true;
-        }
-        return false;
-    }
-    
-    /**
-     * 解锁
-     */
-    public function unlock(): void
-    {
-        $this->locked = false;
-    }
-    
-    /**
-     * 检查是否已加锁
-     * 
-     * @return bool
-     */
-    public function isLocked(): bool
-    {
-        return $this->locked;
+        return [
+            'runTask' => static fn(?float $timeout = null): mixed => static::run($wrappedTask, $timeout),
+            'cancelTask' => $cancel,
+            'isCancelled' => static fn(): bool => $cancelled,
+        ];
     }
 }

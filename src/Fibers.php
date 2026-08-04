@@ -7,6 +7,16 @@ namespace Kode\Fibers;
 use Kode\Fibers\Core\FiberPool;
 use Kode\Fibers\Channel\Channel;
 use Kode\Context\Context;
+use Kode\Fibers\Concurrency\CancellationToken;
+use Kode\Fibers\Concurrency\CancellationTokenSource;
+use Kode\Fibers\Concurrency\CancelledException;
+use Kode\Fibers\Concurrency\Coroutine;
+use Kode\Fibers\Concurrency\FiberLocal;
+use Kode\Fibers\Concurrency\Mutex;
+use Kode\Fibers\Concurrency\Runtime;
+use Kode\Fibers\Concurrency\Scheduler;
+use Kode\Fibers\Concurrency\Semaphore;
+use Kode\Fibers\Concurrency\WaitGroup;
 use Kode\Fibers\Core\CircuitBreaker;
 use Kode\Fibers\Core\RoundRobinBalancer;
 use Kode\Fibers\Core\DistributedScheduler;
@@ -64,6 +74,15 @@ use Kode\Fibers\Task\Task;
  * @method static array diagnose()
  * @method static void enableSafeDestructMode()
  * @method static void deferDestructTask(callable $task)
+ * @method static Scheduler scheduler()
+ * @method static Coroutine async(callable $task, string $name = null)
+ * @method static mixed await(Coroutine|array $coroutine, float $timeout = null)
+ * @method static array loop(iterable $tasks)
+ * @method static WaitGroup waitGroup(int $delta = 0)
+ * @method static Semaphore semaphore(int $permits)
+ * @method static Mutex mutex()
+ * @method static FiberLocal local(\Closure $initializer = null)
+ * @method static CancellationToken timeoutToken(float $seconds)
  */
 class Fibers
 {
@@ -100,27 +119,133 @@ class Fibers
     {
         // 检查环境
         Environment::check();
-        
+
         // 自动启用安全析构模式（针对PHP < 8.4）
         if (PHP_VERSION_ID < 80400 && !static::$safeDestructMode) {
             static::enableSafeDestructMode();
         }
-        
+
         try {
-            // 创建任务对象
-            $taskObj = Task::make($task, ['timeout' => $timeout]);
-            
-            // 创建临时纤程池执行任务
-            $pool = new FiberPool(['size' => 1]);
-            $result = $pool->run($taskObj);
-            
-            // 执行延迟的析构任务（如果有的话）
-            static::processDeferredDestructTasks();
-            
-            return $result;
+            return Runtime::execute($task, $timeout);
+        } catch (CancelledException | FiberException $e) {
+            // 取消 / 超时保留原始异常类型，便于调用方精确捕获
+            throw $e;
         } catch (\Throwable $e) {
             throw new FiberException('Fiber execution failed: ' . $e->getMessage(), (int)$e->getCode(), $e);
+        } finally {
+            // 执行延迟的析构任务（如果有的话）
+            static::processDeferredDestructTasks();
         }
+    }
+
+    /**
+     * 获取当前调度器（协程内为所属调度器，否则为进程级默认调度器）
+     *
+     * @return Scheduler
+     */
+    public static function scheduler(): Scheduler
+    {
+        return Runtime::scheduler();
+    }
+
+    /**
+     * 创建一个协程（不阻塞，返回协程句柄）
+     *
+     * 在事件循环外调用时会挂到默认调度器上，需配合 {@see static::loop()}
+     * 或 {@see static::await()} 驱动执行。
+     *
+     * @param callable $task 协程主体
+     * @param string|null $name 可选名称
+     * @return Coroutine
+     */
+    public static function async(callable $task, ?string $name = null): Coroutine
+    {
+        return static::scheduler()->go($task, $name);
+    }
+
+    /**
+     * 等待协程（或协程数组）完成并取回结果
+     *
+     * @param Coroutine|array $coroutine
+     * @param float|null $timeout
+     * @return mixed
+     * @throws \Throwable
+     */
+    public static function await(Coroutine|array $coroutine, ?float $timeout = null): mixed
+    {
+        return static::scheduler()->await($coroutine, $timeout);
+    }
+
+    /**
+     * 在一个全新的事件循环中执行一批任务并返回结果
+     *
+     * @param iterable $tasks
+     * @return array
+     * @throws \Throwable
+     */
+    public static function loop(iterable $tasks): array
+    {
+        return (new Scheduler())->runAll($tasks);
+    }
+
+    /**
+     * 创建等待组
+     *
+     * @param int $delta 初始计数
+     * @return WaitGroup
+     */
+    public static function waitGroup(int $delta = 0): WaitGroup
+    {
+        $group = new WaitGroup();
+
+        if ($delta > 0) {
+            $group->add($delta);
+        }
+
+        return $group;
+    }
+
+    /**
+     * 创建信号量（并发限流）
+     *
+     * @param int $permits 并发上限
+     * @return Semaphore
+     */
+    public static function semaphore(int $permits): Semaphore
+    {
+        return new Semaphore($permits);
+    }
+
+    /**
+     * 创建协程互斥锁
+     *
+     * @return Mutex
+     */
+    public static function mutex(): Mutex
+    {
+        return new Mutex();
+    }
+
+    /**
+     * 创建纤程本地变量
+     *
+     * @param \Closure|null $initializer 首次访问时生成默认值的初始化器
+     * @return FiberLocal
+     */
+    public static function local(?\Closure $initializer = null): FiberLocal
+    {
+        return new FiberLocal($initializer);
+    }
+
+    /**
+     * 创建一个在指定秒数后自动取消的取消令牌
+     *
+     * @param float $seconds 秒数
+     * @return CancellationToken
+     */
+    public static function timeoutToken(float $seconds): CancellationToken
+    {
+        return CancellationTokenSource::withTimeout($seconds)->token();
     }
 
     /**
@@ -239,11 +364,36 @@ class Fibers
      */
     public static function concurrent(array $tasks, ?float $timeout = null): array
     {
+        if ($tasks === []) {
+            return [];
+        }
+
         try {
-            return TaskRunner::concurrent($tasks, ['size' => count($tasks), 'timeout' => $timeout]);
+            // timeout 作用于每个任务：到期真正中断，不再被静默丢弃
+            return TaskRunner::concurrent($tasks, ['timeout' => $timeout]);
+        } catch (CancelledException | FiberException $e) {
+            throw $e;
         } catch (\Throwable $e) {
             throw new FiberException('Concurrent execution failed: ' . $e->getMessage(), (int)$e->getCode(), $e);
         }
+    }
+
+    /**
+     * 并发执行多个任务，任一失败即抛出（结果不含 Throwable）
+     *
+     * @param array $tasks 任务数组
+     * @param float|null $timeout 单个任务的超时时间（秒）
+     * @param int|null $concurrency 并发上限
+     * @return array
+     * @throws \Throwable
+     */
+    public static function concurrentAll(array $tasks, ?float $timeout = null, ?int $concurrency = null): array
+    {
+        if ($tasks === []) {
+            return [];
+        }
+
+        return Runtime::all($tasks, $timeout, $concurrency);
     }
 
     /**
@@ -272,8 +422,8 @@ class Fibers
      */
     public static function sleep(float $seconds): void
     {
-        // 在PHP Fiber中，sleep会阻塞当前纤程，但不会阻塞整个进程
-        usleep((int)($seconds * 1000000));
+        // 事件循环内让出执行权（其它协程可继续推进），循环外退化为 usleep
+        Runtime::sleep($seconds);
     }
 
     /**
@@ -322,26 +472,29 @@ class Fibers
 
     public static function batch(array $items, callable $handler, ?int $concurrency = null, ?float $timeout = null): array
     {
+        if ($items === []) {
+            return [];
+        }
+
         $maxConcurrency = max(1, CpuInfo::get() * 2);
-        $concurrency = max(1, min($concurrency ?? $maxConcurrency, count($items) > 0 ? count($items) : 1));
-        $results = [];
+        $concurrency = max(1, min($concurrency ?? $maxConcurrency, count($items)));
 
-        foreach (array_chunk($items, $concurrency, true) as $chunk) {
-            $tasks = [];
-            foreach ($chunk as $key => $item) {
-                $tasks[$key] = fn() => $handler($item, $key);
-            }
+        $tasks = [];
+        foreach ($items as $key => $item) {
+            $tasks[$key] = static fn(): mixed => $handler($item, $key);
+        }
 
-            $chunkResults = static::concurrent($tasks, $timeout);
-            foreach ($chunkResults as $key => $value) {
-                if ($value instanceof \Throwable) {
-                    throw new FiberException(
-                        sprintf('Batch task failed at key [%s]: %s', (string) $key, $value->getMessage()),
-                        (int) $value->getCode(),
-                        $value
-                    );
-                }
-                $results[$key] = $value;
+        // 用信号量控制并发上限：空出的名额会被立刻复用，
+        // 不再像分块串行那样被最慢的任务拖住整批。
+        $results = Runtime::settleAll($tasks, $timeout, $concurrency);
+
+        foreach ($results as $key => $value) {
+            if ($value instanceof \Throwable) {
+                throw new FiberException(
+                    sprintf('Batch task failed at key [%s]: %s', (string) $key, $value->getMessage()),
+                    (int) $value->getCode(),
+                    $value
+                );
             }
         }
 
@@ -811,12 +964,9 @@ class Fibers
      * @param callable $task 任务
      * @return mixed
      */
-    public static function remote(string $nodeId, callable $task): mixed
+    public static function remote(string $nodeId, callable $task, ?float $timeout = null): mixed
     {
-        return static::scheduleDistributedRemote(
-            [$nodeId => $task],
-            [$nodeId => ['healthy' => true]]
-        )[$nodeId] ?? null;
+        return static::onNode($nodeId, $task, [], $timeout);
     }
 
     /**
@@ -827,14 +977,18 @@ class Fibers
      * @param array $nodeConfig 节点配置
      * @return mixed
      */
-    public static function onNode(string $nodeId, callable $task, array $nodeConfig = []): mixed
+    public static function onNode(string $nodeId, callable $task, array $nodeConfig = [], ?float $timeout = null): mixed
     {
         $nodes = [$nodeId => array_merge(['healthy' => true], $nodeConfig)];
-        $tasks = [$nodeId => $task];
-        
-        $result = static::scheduleDistributed($tasks, $nodes);
-        
-        return $result[$nodeId] ?? null;
+        $dispatch = static::scheduleDistributed([$nodeId => $task], $nodes);
+
+        // 节点不健康 / 标签不匹配时任务不会被分派，此时应显式失败而非静默返回 null
+        if (!isset($dispatch['assignments'][$nodeId][$nodeId])) {
+            throw new FiberException(sprintf('节点 [%s] 不可用，任务未被分派', $nodeId));
+        }
+
+        // 当前进程即为该节点的执行端，直接在协程中运行任务并返回真实结果
+        return static::run($task, $timeout);
     }
 
     /**
