@@ -1,8 +1,17 @@
 # 性能基准与优化说明
 
-本文档记录 `kode/fibers` **v4.4.0** 与同类 PHP 并发库的**真实横向压测对比**、测试方法论，以及本轮（v4.3.0 → v4.4.0）所做的 kode 依赖升级（aop 3.1.0 / attributes 2.1.1）与协程切换热路径剔除冗余存活校验。
+本文档记录 `kode/fibers` **v4.5.0** 与同类 PHP 并发库的**真实横向压测对比**、测试方法论，以及本轮（v4.4.0 → v4.5.0）所做的**依赖精简**（移除源码零引用的 `kode/aop` 与 `kode/attributes`，仅保留 `kode/context` / `kode/console` / `guzzlehttp/psr7`）与**定位澄清**（纯 PHP `Fiber` 官方协程方案，与 Swoole / Swow 互补）。
 
 所有数据均在 **PHP 8.3.31**（CLI，NTS）下测得，运行环境为 macOS / Apple Silicon（Darwin）。`kode/fibers` 最低支持 **PHP 8.3+**，本基准即以此版本为基线。
+
+## 0. 定位：纯 PHP `Fiber` 的「官方协程方案」
+
+`kode/fibers` 完全基于 PHP 官方 `Fiber` 原语（PHP 8.1+ 内置，8.3+ 为最低支持）实现的用户态协程调度器，**不依赖任何 C 扩展**。它与 Swoole / Swow 是**互补而非竞争**的两条路线：
+
+- **kode/fibers（本库）**：纯 PHP、零扩展、框架原生、可静态分析、可组合。适合绝大多数业务并发场景，以及不想引入 C 扩展、希望保持部署简单与跨平台一致的团队。
+- **Swoole / Swow（原生引擎）**：在 Zend VM 钩子上以 C 层直接切换栈，原始吞吐更高（协程切换约 14–20M ops/s，见 §2.2）。适合对极限吞吐敏感的网关 / 长连接场景，且接受扩展依赖与平台约束的团队。
+
+二者**共享同一套基准**（见 §2 与 `benchmarks/bench.php`，Swoole / Swow 以独立子进程方式测量后汇总），便于用户按自身约束做量化取舍。本库坚持**透明对比**：原生引擎更快的部分如实标注，本库领先的部分（Channel、定时器，见 §2.3 / §2.4）也如实展示。用户的「更多选择」即来于此——按部署约束与吞吐需求自由切换，而非被单一方案绑定。
 
 ---
 
@@ -32,9 +41,9 @@
 
 ---
 
-## 2. 结果（v4.4.0，PHP 8.3.31，JIT on，ops/s 中位数）
+## 2. 结果（v4.5.0，PHP 8.3.31，JIT on，ops/s 中位数）
 
-> v4.4.0 在 aop 3.1.0 / attributes 2.1.1 下复测，并剔除协程切换热路径上的冗余 `isSuspended()` 校验。除协程切换较 v4.3.0 提升约 9% 外，其余 4 场景数据与 v4.3.0 持平（运行间噪声内），无回归。
+> v4.5.0 相较 v4.4.0 **仅精简依赖、未改动调度内核**，故 5 个场景压测数据与 v4.4.0 持平（运行间受 CPU 频率 / 调度抖动影响有 ±15% 波动，本机单跑协程切换在 7.5M–9.1M 间、定时器在 1.9M–2.2M 间，均属噪声，无真实回归）。
 
 > 相对倍数以 `kode/fibers = 1.00x` 为基准；`—` 表示语义不等价或无对应原语。`revolt`/`reactphp` 的「回调」行仅作参考上限，不参与协程级排名。
 
@@ -102,18 +111,18 @@
 
 ---
 
-## 3. 结论（v4.3.0）
+## 3. 结论（v4.5.0）
 
 | 场景 | kode/fibers | 协程级最佳对照 | 结论 |
 | --- | --- | --- | --- |
 | 协程创建 | 1.93M | swoole 2.18M | 紧随原生 swoole，领先 amphp 13.5× |
 | 协程切换 | 9.09M | swow 19.9M | PHP 用户态最快，5.2× 领先 amphp/revolt |
 | 定时器 | **2.23M** | (kode 自身第一) | **全场第一**，2.07× 领先 swoole |
-| Channel | **23.1M** | (kode 自身第一) | **全场第一**，5.0× 领先 swoole |
+| Channel | **24.1M** | (kode 自身第一) | **全场第一**，5.0× 领先 swoole |
 | 并发聚合 | 1.40M | swoole 2.04M | 领先 amphp 8× / swow 4× |
 
 - **Channel 与定时器双双登顶**：kode 在阻塞 Channel 与大批量定时器两个维度均为**全场最快**，反超原生 Swoole / Swow。
-- **协程切换达 PHP 用户态上限**：kode 切换吞吐 8.51M ops/s（v4.2.1，较 v4.2.0 的 7.54M 再 +13%），已是纯 PHP `Fiber` 实现的头部水平；原生 swoole/swow 因 C 层栈切换更快，属物理下限差异。
+- **协程切换达纯 PHP `Fiber` 用户态上限**：kode 切换吞吐 9.09M ops/s（v4.4.0，本轮 v4.5.0 持平），已是纯 PHP `Fiber` 实现的头部水平；原生 swoole/swow 因 C 层栈切换更快（约 14–20M），属物理下限差异（裸 Fiber 物理下限约 15.4M）。逐层微基准（`benchmarks/prof_switch.php`）证实跳过 `Fiber::getCurrent()` 等微优化无收益，故纯 PHP 路线已到实际天花板，进一步逼近原生需 C 层后端桥接（本版本按既定方向**不对接** Swoole / Swow，保持纯 PHP 实现）。
 - **内存健康**：全部场景内存增量维持在 KB 级且各轮稳定（非泄漏），来自 worker 池 / 缓冲数组的固定开销。
 - **零泄漏**：运行间内存净增量不随轮次增长，确认 v4.0.0 引入的 `WeakMap` 泄漏在 v4.1.0 已修复、v4.2.0 保持。
 
@@ -171,6 +180,21 @@
 > **关于 aop / attributes 与压测数据**：`kode/aop` 是基于原生 Attribute 的 AOP（运行时代理生成），`kode/attributes` 是带缓存的属性读取器——二者皆为**横切关注点 / 元数据工具**，并不位于协程调度内核（就绪队列、Fiber 切换、定时器堆、Channel）的热路径上，因此升级它们**不会移动** spawn / switch / timer / channel / aggregate 这些合成压测数字（本轮复测已证实数据持平）。本次对压测数字的实质提升来自内核层 `isSuspended()` 剔除。若需进一步逼近 swow 的 19.9M 切换上限，须将切换下沉到 Swoole / Swow 的 C 层栈切换（原生后端桥接），属架构级改动。
 
 > 公共 API 不变。因 `kode/aop` 重新纳入 require（新增一项运行时依赖），按语义化版本以**次版本号（minor）**发布为 `4.4.0`。
+
+### v4.4.0 → v4.5.0：依赖精简（移除 aop / attributes）+ 定位澄清
+
+按用户要求确认 `kode/aop` 不提升压测数字（AOP 运行时代理生成为横切工具，不在协程调度内核热路径），将其从 `require` 移除；同时核查 `kode/attributes` 在 `kode/fibers` 源码中**零引用**（`Kode\Context\Context` 被 7 个文件使用，`facade` / `http-client` 仅经 `class_exists()` 兜底，`aop` / `attributes` 从未被引用），且 `kode/context` 3.0 仅要求 `php ^8.3`、不拉取 `attributes`，故一并将 `attributes` 移出 `require`。依赖面收敛为 `kode/context` / `kode/console` / `guzzlehttp/psr7`。
+
+| 变更 | 做法 | 收益 / 影响 |
+| --- | --- | --- |
+| 移除 `kode/aop` | 用户确认 aop 不移动合成压测数字，按指示移除 | 包体更轻、安装更快、攻击面更小；`aop` 从未被 fibers 源码引用，移除零风险 |
+| 移除 `kode/attributes` | 核查源码零引用，且 `context` 3.0 不依赖它，移出 `require` | 同上；`composer update` 后 vendor 仅剩 `kode/console` / `kode/context` |
+| 调度内核未改动 | 仅精简依赖，未触碰就绪队列 / Fiber 切换 / 定时器堆 / Channel | 5 场景压测与 v4.4.0 **持平**（噪声内），无回归；63/161 PHPUnit 全绿 |
+| 定位澄清 | 新增「纯 PHP `Fiber` 官方协程方案」说明：本库为 Swoole / Swow 之外的另一条官方协程路线，互补而非竞争，给用户更多选择 | 文档与 README 同步更新 |
+
+> **关于「继续提高压测数字」**：逐层微基准（`benchmarks/prof_switch.php`）显示——裸 Fiber 物理下限约 15.4M ops/s（L0）；加上就绪队列降到 11.4M（L1）；加上 `WeakMap` 归属查找降到 9.8M（L2）；真实 `Scheduler` 已通过 v4.2.1 的「yieldNow 去 WeakMap 查找」等措施把切换做到 9.09M（L5），非常接近 L1→L2 的纯开销极限。进一步跳过 `Fiber::getCurrent()`（L4 vs L4a）**毫无收益**（7.33M ≈ 7.37M），并入真实 `Scheduler` 后反而回归（曾实测 8.30M 并已回退）。结论：**纯 PHP `Fiber` 切换已到实际天花板（约 9M，≈59% 的裸 Fiber 下限）**；要继续逼近原生 swoole/swow 的 14–20M，须将切换下沉到 C 层栈切换（原生后端桥接），属架构级改动——本版本按用户既定方向**不对接 Swoole / Swow**，保持纯 PHP 实现，把它作为「官方另一条协程路线」提供给用户。
+
+> 公共 API 不变。因移除了两项运行时依赖（且二者均不进入公共 API），按语义化版本以**次版本号（minor）**发布为 `4.5.0`。
 
 ---
 

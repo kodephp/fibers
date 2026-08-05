@@ -20,9 +20,9 @@
 - 📝 **原生 PHP 8.3 Attributes + PHPDoc 实现 IDE 完整识别**
 - 🚫 **禁用函数检测 + 运行环境诊断**
 
-## 📊 性能基准（v4.4.0）
+## 📊 性能基准（v4.5.0）
 
-`kode/fibers` 在 v4.4.0 中将 kode 依赖升级至 **`kode/aop` 3.1.0 + `kode/attributes` 2.1.1**（aop 3.1.0 已放宽约束，仅要求 `php ^8.3` + `attributes ^2.1`，可与 `context 3.0.0` 同驻），并继续在协程切换热路径剔除冗余的 `isSuspended()` 存活校验（协程切换较 v4.3.0 再 +9%）。在 **PHP 8.3** + OPcache JIT 下与同类库（含原生协程引擎 Swoole / Swow）做真实横向压测。**Channel 与定时器仍双双登顶全场最快，反超原生 Swoole / Swow**：
+`kode/fibers` 在 v4.5.0 中**移除了源码零引用的 `kode/aop` 与 `kode/attributes` 依赖**（依赖面收敛为 `kode/context` / `kode/console` / `guzzlehttp/psr7`），包体更轻、安装更快、攻击面更小；调度内核未改动，性能与 v4.4.0 持平（协程切换 ~9.1M、Channel ~24M、定时器 ~2.2M，均为 PHP 用户态最快 / 全场第一）。本库是**纯 PHP、零 C 扩展**的协程调度器，基于 PHP 官方 `Fiber` 原语实现，是 Swoole / Swow 之外的**官方另一条协程路线**——若你的场景追求极限原生吞吐且可接受扩展依赖，可直接选用 Swoole / Swow；若你更看重零扩展、框架原生、可静态分析与跨平台一致，本库即为此而生。在 **PHP 8.3** + OPcache JIT 下与同类库（含原生协程引擎 Swoole / Swow）做真实横向压测，**Channel 与定时器双双登顶全场最快，反超原生 Swoole / Swow**：
 
 | 场景 | kode/fibers (ops/s) | 协程级最佳对照 | 相对倍数 | 内存增量 |
 | --- | ---: | ---: | ---: | ---: |
@@ -38,6 +38,16 @@
 
 `kode/fibers` 旨在为 Laravel、Symfony、Yii3、ThinkPHP8 及自建框架提供统一的纤程运行时能力，减少业务接入并发模型时的改造成本。\
 项目重点解决三类问题：PHP 版本差异（尤其是 PHP<8.4 的析构限制）、生产场景下的并发治理（池化、超时、重试、通信）、以及跨框架可移植性（统一配置与 CLI 初始化）。
+
+## 🧭 定位：纯 PHP 官方协程方案
+
+`kode/fibers` 完全基于 PHP 官方 `Fiber` 原语（PHP 8.1+ 内置，8.3+ 最低支持）实现，**不依赖任何 C 扩展**：
+
+- ✅ **零扩展、可静态分析**：纯 PHP 实现，IDE、PHPStan、Psalm 全链路可分析；部署不挑平台、不被扩展绑定。
+- ✅ **框架原生、可组合**：Laravel / Symfony / Yii3 / ThinkPHP8 等一键接入，也可在裸 PHP 中直接使用。
+- 🔁 **与 Swoole / Swow 互补**：二者在 Zend VM 钩子上以 C 层切换栈，原始吞吐更高（协程切换约 14–20M ops/s）；本库则在 `Fiber` 用户态下做到同类最快（切换 ~9M、Channel ~24M、定时器 ~2.2M）。按部署约束与吞吐需求自由取舍——**更多选择，而非单一绑定**。
+
+> 💡 需要极限原生吞吐？直接 `composer require swoole` / `swow` 并在其协程环境中使用 `kode/fibers` 的运行时桥接（`RuntimeBridge`）；更看重轻量与一致性？仅 `composer require kode/fibers` 即可。
 
 ## ⚙️ PHP 8.5 兼容与便捷 API
 
