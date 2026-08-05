@@ -13,12 +13,13 @@
 7. [运行时桥接](runtime-bridge.md)
 8. [Profiler 面板](profiler-dashboard.md)
 9. [ORM 适配层](orm-adapters.md)
-10. [API 参考](api-reference.md)
-11. [路线图](roadmap.md)
-12. [示例总览](examples.md)
+10. [性能基准与优化](benchmark.md)
+11. [API 参考](api-reference.md)
+12. [路线图](roadmap.md)
+13. [示例总览](examples.md)
 
 ## 文档约定
 
-- 所有示例默认在 PHP 8.1+ 下运行。
+- 所有示例默认在 PHP 8.3+ 下运行（`kode/fibers` 最低要求 PHP 8.3）。
 - 若示例使用到并发执行，建议在 CLI 环境运行。
 - 若 API 返回数组结构，文档给出关键字段说明与最小示例。

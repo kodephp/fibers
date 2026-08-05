@@ -7,7 +7,6 @@ namespace Kode\Fibers\Concurrency;
 use Closure;
 use Fiber;
 use Kode\Fibers\Exceptions\FiberException;
-use SplQueue;
 use Throwable;
 use WeakMap;
 
@@ -45,11 +44,31 @@ final class Scheduler
     private static ?self $default = null;
 
     /**
-     * 就绪回调队列
+     * 就绪队列
      *
-     * @var SplQueue<Closure>
+     * 用「原生数组 + 头尾游标」而非 SplQueue：后者每次入队都要分配一个双向链表
+     * 节点对象，在每秒百万级调度的热路径上这笔开销相当可观。
+     *
+     * 队列元素是多态的，调度器按类型直接派发，从而免去为每次唤醒包一层闭包：
+     * - {@see Fiber}      直接恢复执行（yieldNow 的零分配快路径）
+     * - {@see Suspension} 交还控制权给挂起的协程
+     * - {@see Coroutine}  首次启动协程
+     * - {@see Timer}      触发到期定时器
+     * - {@see Closure}    普通 defer 回调
+     *
+     * @var array<int, Closure|Coroutine|Timer|Suspension|Fiber>
      */
-    private SplQueue $ready;
+    private array $ready = [];
+
+    /**
+     * 就绪队列出队游标
+     */
+    private int $readyHead = 0;
+
+    /**
+     * 就绪队列入队游标
+     */
+    private int $readyTail = 0;
 
     private TimerQueue $timers;
 
@@ -82,7 +101,6 @@ final class Scheduler
 
     public function __construct()
     {
-        $this->ready = new SplQueue();
         $this->timers = new TimerQueue();
         $this->owned = new WeakMap();
     }
@@ -178,9 +196,8 @@ final class Scheduler
         $this->owned[$coroutine->fiber()] = $coroutine;
         $this->spawnedCount++;
 
-        $this->ready->enqueue(static function () use ($coroutine): void {
-            $coroutine->start();
-        });
+        // 直接投递协程句柄，由事件循环调用 start()，无需包装闭包
+        $this->ready[$this->readyTail++] = $coroutine;
 
         return $coroutine;
     }
@@ -203,13 +220,14 @@ final class Scheduler
     }
 
     /**
-     * 向就绪队列投递一个回调
+     * 向就绪队列投递一个可调度项
      *
+     * @param  Closure|Coroutine|Timer|Suspension|Fiber $item
      * @internal 供 Suspension 等内部组件使用
      */
-    public function enqueue(Closure $callback): void
+    public function enqueue(Closure|Coroutine|Timer|Suspension|Fiber $item): void
     {
-        $this->ready->enqueue($callback);
+        $this->ready[$this->readyTail++] = $item;
     }
 
     /**
@@ -217,7 +235,9 @@ final class Scheduler
      */
     public function defer(callable $callback): void
     {
-        $this->ready->enqueue($callback instanceof Closure ? $callback : Closure::fromCallable($callback));
+        $this->ready[$this->readyTail++] = $callback instanceof Closure
+            ? $callback
+            : Closure::fromCallable($callback);
     }
 
     /**
@@ -259,14 +279,17 @@ final class Scheduler
             );
         }
 
-        if (!isset($this->owned[$fiber])) {
+        // 单次 WeakMap 查找同时完成归属校验与句柄登记
+        $coroutine = $this->owned[$fiber] ?? null;
+
+        if ($coroutine === null) {
             throw new FiberException(
                 '当前 Fiber 不受该调度器管理，无法挂起。请使用同一个 Scheduler 创建协程。'
             );
         }
 
         $suspension = new Suspension($this, $fiber);
-        $this->owned[$fiber]->setSuspension($suspension);
+        $coroutine->setSuspension($suspension);
 
         return $suspension;
     }
@@ -301,9 +324,10 @@ final class Scheduler
     {
         $suspension = $this->park();
 
-        $this->ready->enqueue(static function () use ($suspension): void {
-            $suspension->resume();
-        });
+        // 直接投递挂起句柄：事件循环取到它时会把控制权交还本协程。
+        // 相比「入队一个调用 resume() 的闭包」少一次闭包分配与一次队列往返，
+        // 同时仍保留 park() 登记的取消能力（取消会在此处注入异常）。
+        $this->ready[$this->readyTail++] = $suspension;
 
         $suspension->suspend();
     }
@@ -386,9 +410,11 @@ final class Scheduler
                     return;
                 }
 
-                $this->expireTimers();
+                if ($this->timers->count() > 0) {
+                    $this->expireTimers();
+                }
 
-                if (!$this->ready->isEmpty()) {
+                if ($this->readyHead < $this->readyTail) {
                     $this->drainReady();
 
                     continue;
@@ -400,7 +426,7 @@ final class Scheduler
                     return;
                 }
 
-                $delay = $next->at() - self::now();
+                $delay = $next->at - self::now();
 
                 if ($delay > 0) {
                     // 无任何就绪任务，等待最近的定时器到期：这是真正的空闲等待而非轮询
@@ -479,6 +505,11 @@ final class Scheduler
      */
     public function onCoroutineFinished(Coroutine $coroutine): void
     {
+        // 解除归属登记。WeakMap 的键是弱引用，但值（Coroutine）反过来强引用着
+        // 键（Fiber），这条循环会让条目永远无法被自动回收——长驻进程里每创建
+        // 一个协程就会永久滞留一份 Fiber+Coroutine。必须在此显式摘除。
+        unset($this->owned[$coroutine->fiber()]);
+
         if ($coroutine->error() === null) {
             return;
         }
@@ -501,7 +532,7 @@ final class Scheduler
         return [
             'ticks' => $this->tickCount,
             'spawned' => $this->spawnedCount,
-            'ready' => $this->ready->count(),
+            'ready' => $this->readyTail - $this->readyHead,
             'timers' => $this->timers->count(),
             'running' => $this->running,
         ];
@@ -512,7 +543,9 @@ final class Scheduler
      */
     public function clear(): void
     {
-        $this->ready = new SplQueue();
+        $this->ready = [];
+        $this->readyHead = 0;
+        $this->readyTail = 0;
         $this->timers->clear();
         $this->failures = [];
     }
@@ -520,17 +553,14 @@ final class Scheduler
     private function createTimer(float $seconds, callable $callback, ?float $interval): Timer
     {
         $sequence = ++$this->timerSequence;
-        $queue = $this->timers;
-
         $timer = new Timer(
             'timer#' . $sequence,
             self::now() + max(0.0, $seconds),
             $sequence,
             $callback instanceof Closure ? $callback : Closure::fromCallable($callback),
             $interval,
-            static function () use ($queue): void {
-                $queue->markStale();
-            }
+            null,
+            $this->timers,
         );
 
         $this->timers->insert($timer);
@@ -545,21 +575,30 @@ final class Scheduler
     {
         $now = self::now();
 
-        while (($timer = $this->timers->peek()) !== null && $timer->at() <= $now) {
-            $this->timers->extract();
+        // 只处理进入本轮时就已存在的定时器：回调内部新注册的零延迟定时器留到
+        // 下一轮，避免「回调不断注册 delay(0)」把事件循环永久困在本函数里。
+        $limit = $this->timerSequence;
 
-            if ($timer->isCancelled()) {
-                continue;
-            }
-
-            if ($timer->isPeriodic()) {
+        while (($timer = $this->timers->extractExpired($now, $limit)) !== null) {
+            if ($timer->interval !== null) {
                 $timer->reschedule($now);
                 $this->timers->insert($timer);
             }
 
-            $this->ready->enqueue(static function () use ($timer): void {
-                $timer->fire();
-            });
+            // 到期即触发，不再绕行就绪队列：省掉一次入队、一次出队和一次类型派发。
+            // 定时器本就该在到期时刻执行，中转反而引入额外延迟。
+            $this->tickCount++;
+
+            try {
+                // extractExpired() 已保证未取消，直接调用回调，跳过 fire() 的转发
+                ($timer->callback)();
+            } catch (Throwable $e) {
+                if ($this->errorHandler === null) {
+                    throw $e;
+                }
+
+                ($this->errorHandler)($e);
+            }
         }
     }
 
@@ -571,14 +610,30 @@ final class Scheduler
      */
     private function drainReady(): void
     {
-        $batch = $this->ready->count();
+        // 只处理进入本轮时已存在的项，新产生的留到下一轮
+        $batch = $this->readyTail;
 
-        for ($i = 0; $i < $batch && !$this->ready->isEmpty(); $i++) {
-            $callback = $this->ready->dequeue();
+        while ($this->readyHead < $batch) {
+            $item = $this->ready[$this->readyHead];
+            unset($this->ready[$this->readyHead]);
+            $this->readyHead++;
             $this->tickCount++;
 
             try {
-                $callback();
+                // 按出现频率排序的类型派发：挂起唤醒最频繁，其次是协程启动
+                if ($item instanceof Suspension) {
+                    $item->dispatch();
+                } elseif ($item instanceof Coroutine) {
+                    $item->start();
+                } elseif ($item instanceof Timer) {
+                    $item->fire();
+                } elseif ($item instanceof Fiber) {
+                    if (!$item->isTerminated() && $item->isSuspended()) {
+                        $item->resume();
+                    }
+                } else {
+                    $item();
+                }
             } catch (Throwable $e) {
                 if ($this->errorHandler === null) {
                     throw $e;
@@ -586,6 +641,13 @@ final class Scheduler
 
                 ($this->errorHandler)($e);
             }
+        }
+
+        // 队列排空后重置游标，避免下标随运行时长单调增长
+        if ($this->readyHead === $this->readyTail) {
+            $this->ready = [];
+            $this->readyHead = 0;
+            $this->readyTail = 0;
         }
     }
 }

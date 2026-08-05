@@ -87,14 +87,9 @@ final class Suspension
             return;
         }
 
-        $fiber = $this->fiber;
-        $this->scheduler->enqueue(static function () use ($fiber, $value): void {
-            if ($fiber->isTerminated() || !$fiber->isSuspended()) {
-                return;
-            }
-
-            $fiber->resume($value);
-        });
+        // 直接把句柄本身投递到就绪队列，由调度器回调 dispatch()。
+        // 这样每次唤醒都省去一个临时闭包的分配——在高频挂起/唤醒场景下差距显著。
+        $this->scheduler->enqueue($this);
     }
 
     /**
@@ -113,14 +108,29 @@ final class Suspension
             return;
         }
 
-        $fiber = $this->fiber;
-        $this->scheduler->enqueue(static function () use ($fiber, $error): void {
-            if ($fiber->isTerminated() || !$fiber->isSuspended()) {
-                return;
-            }
+        $this->scheduler->enqueue($this);
+    }
 
-            $fiber->throw($error);
-        });
+    /**
+     * 真正把控制权交还给被挂起的协程
+     *
+     * @internal 仅供 Scheduler 在事件循环中调用
+     */
+    public function dispatch(): void
+    {
+        $fiber = $this->fiber;
+
+        if ($fiber->isTerminated() || !$fiber->isSuspended()) {
+            return;
+        }
+
+        if ($this->earlyError !== null) {
+            $fiber->throw($this->earlyError);
+
+            return;
+        }
+
+        $fiber->resume($this->earlyValue);
     }
 
     /**

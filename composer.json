@@ -3,7 +3,7 @@
     "description": "Kode/Fibers - 高性能 PHP Fiber 协程调度器。提供协程池、上下文传递、分布式调度、断路器、负载均衡、RPC 通信（JSON/gRPC/WebSocket）、分布式事务（2PC/TCC/Saga）、多框架集成等企业级特性。",
     "type": "library",
     "license": "Apache-2.0",
-    "version": "4.0.0",
+    "version": "4.1.0",
     "authors": [
         {
             "name": "Kode Team",
@@ -21,7 +21,12 @@
         "kode/console": "^2.1"
     },
     "require-dev": {
-        "phpunit/phpunit": "^12.5"
+        "amphp/amp": "^3.0",
+        "amphp/pipeline": "^1.2",
+        "phpunit/phpunit": "^12.5",
+        "react/event-loop": "^1.5",
+        "react/promise": "^3.2",
+        "revolt/event-loop": "^1.0"
     },
     "suggest": {
         "ext-curl": "用于 HTTP 客户端 cURL 驱动",
@@ -46,7 +51,8 @@
     ],
     "scripts": {
         "test": "php vendor/bin/phpunit",
-        "test-coverage": "php vendor/bin/phpunit --coverage-html coverage"
+        "test-coverage": "php vendor/bin/phpunit --coverage-html coverage",
+        "bench": "php benchmarks/bench.php"
     },
     "config": {
         "sort-packages": true

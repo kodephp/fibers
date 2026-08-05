@@ -5,21 +5,46 @@ declare(strict_types=1);
 namespace Kode\Fibers\Concurrency;
 
 /**
- * 定时器最小堆
+ * 定时器最小堆（按到期时刻分桶）
  *
- * 以「触发时间 + 入堆序号」为键的二叉最小堆，取最早到期定时器为 O(1)，
- * 插入 / 弹出为 O(log n)。取消采用惰性删除：被取消的定时器在出堆时跳过，
- * 当无效条目占比过高时整体重建，避免堆无限增长。
+ * 堆的元素不是单个定时器，而是「同一到期时刻的定时器桶」{@see TimerBucket}。
+ * 这样做同时拿到两个好处：
+ *
+ * - **稳定性**：同一时刻注册的定时器严格按注册顺序触发，桶内就是 FIFO 队列。
+ *   若把 sequence 塞进堆的比较键来实现稳定排序，相同时刻的元素每次出堆都会
+ *   被迫走满 O(log n) 的下沉路径，代价高昂。
+ * - **性能**：批量注册相同延迟的定时器（delay(0)、统一超时时长等）在真实业务
+ *   里极常见，此时堆中只有一个节点，进出都是 O(1)，整体从 O(n log n) 降到 O(n)。
+ *
+ * 时间点各不相同时，行为退化为标准二叉最小堆，复杂度 O(log m)（m 为不同时刻数）。
+ * 取消采用惰性删除：出队时跳过，无效条目占比过高时整体重建。
  */
 final class TimerQueue
 {
     /**
-     * @var Timer[] 一维数组表示的二叉堆（下标从 0 开始）
+     * @var array<int, TimerBucket> 一维数组表示的二叉最小堆（按 at 排序）
      */
     private array $heap = [];
 
     /**
-     * 已取消但仍留在堆中的条目数（用于触发重建）
+     * 堆内桶数量
+     */
+    private int $size = 0;
+
+    /**
+     * 到期时刻 => 桶。键为 float 的二进制表示，避免浮点转字符串的精度损失
+     *
+     * @var array<string, TimerBucket>
+     */
+    private array $index = [];
+
+    /**
+     * 队列中定时器总数（含已取消但尚未清理的）
+     */
+    private int $total = 0;
+
+    /**
+     * 已取消但仍留在队列中的条目数（用于触发重建）
      */
     private int $staleCount = 0;
 
@@ -28,8 +53,39 @@ final class TimerQueue
      */
     public function insert(Timer $timer): void
     {
-        $this->heap[] = $timer;
-        $this->siftUp(count($this->heap) - 1);
+        $key = pack('d', $timer->at);
+        $this->total++;
+
+        $bucket = $this->index[$key] ?? null;
+
+        if ($bucket !== null) {
+            // 已有相同到期时刻的桶，直接追加，无需触碰堆
+            $bucket->push($timer);
+
+            return;
+        }
+
+        $bucket = new TimerBucket($timer->at);
+        $bucket->push($timer);
+        $this->index[$key] = $bucket;
+
+        // 新时间点入堆：空位上浮，每层只写一次
+        $index = $this->size++;
+        $at = $bucket->at;
+
+        while ($index > 0) {
+            $parent = ($index - 1) >> 1;
+            $parentBucket = $this->heap[$parent];
+
+            if ($parentBucket->at <= $at) {
+                break;
+            }
+
+            $this->heap[$index] = $parentBucket;
+            $index = $parent;
+        }
+
+        $this->heap[$index] = $bucket;
     }
 
     /**
@@ -37,9 +93,87 @@ final class TimerQueue
      */
     public function peek(): ?Timer
     {
-        $this->purgeTop();
+        while ($this->size > 0) {
+            $bucket = $this->heap[0];
 
-        return $this->heap[0] ?? null;
+            // 跳过桶头部已取消的条目
+            while ($bucket->head < $bucket->tail) {
+                $timer = $bucket->timers[$bucket->head];
+
+                if (!$timer->cancelled) {
+                    return $timer;
+                }
+
+                unset($bucket->timers[$bucket->head]);
+                $bucket->head++;
+                $this->total--;
+
+                if ($this->staleCount > 0) {
+                    $this->staleCount--;
+                }
+            }
+
+            // 桶已排空，移出堆
+            $this->removeRootBucket();
+        }
+
+        return null;
+    }
+
+    /**
+     * 弹出一个「已到期且未取消」的定时器，没有则返回 null
+     *
+     * 相比先 peek() 判断再 extract() 取出，这里把查找与摘除合并为一次遍历，
+     * 避免事件循环每触发一个定时器就重复走两遍堆顶清理逻辑。
+     *
+     * @param float $now           当前单调时钟时间
+     * @param int   $sequenceLimit 只处理序号不大于该值的定时器，用于隔离本轮
+     *                             回调中新注册的零延迟定时器，防止事件循环饥饿
+     */
+    public function extractExpired(float $now, int $sequenceLimit): ?Timer
+    {
+        while ($this->size > 0) {
+            $bucket = $this->heap[0];
+
+            if ($bucket->at > $now) {
+                return null;
+            }
+
+            while ($bucket->head < $bucket->tail) {
+                $timer = $bucket->timers[$bucket->head];
+
+                if ($timer->cancelled) {
+                    unset($bucket->timers[$bucket->head]);
+                    $bucket->head++;
+                    $this->total--;
+
+                    if ($this->staleCount > 0) {
+                        $this->staleCount--;
+                    }
+
+                    continue;
+                }
+
+                // 桶内序号单调递增，遇到超出本轮范围的即可停手
+                if ($timer->sequence > $sequenceLimit) {
+                    return null;
+                }
+
+                unset($bucket->timers[$bucket->head]);
+                $bucket->head++;
+                $this->total--;
+
+                if ($bucket->isDrained()) {
+                    $this->removeRootBucket();
+                }
+
+                return $timer;
+            }
+
+            $this->removeRootBucket();
+        }
+
+        return null;
     }
 
     /**
@@ -47,13 +181,22 @@ final class TimerQueue
      */
     public function extract(): ?Timer
     {
-        $this->purgeTop();
+        $timer = $this->peek();
 
-        if ($this->heap === []) {
+        if ($timer === null) {
             return null;
         }
 
-        return $this->removeRoot();
+        $bucket = $this->heap[0];
+        unset($bucket->timers[$bucket->head]);
+        $bucket->head++;
+        $this->total--;
+
+        if ($bucket->isDrained()) {
+            $this->removeRootBucket();
+        }
+
+        return $timer;
     }
 
     /**
@@ -70,9 +213,12 @@ final class TimerQueue
         return $this->peek() === null;
     }
 
+    /**
+     * 队列中定时器总数
+     */
     public function count(): int
     {
-        return count($this->heap);
+        return $this->total;
     }
 
     /**
@@ -81,112 +227,84 @@ final class TimerQueue
     public function clear(): void
     {
         $this->heap = [];
+        $this->index = [];
+        $this->size = 0;
+        $this->total = 0;
         $this->staleCount = 0;
     }
 
     /**
-     * 丢弃堆顶所有已取消的定时器
+     * 移除堆顶的桶并重建堆序
      */
-    private function purgeTop(): void
-    {
-        while ($this->heap !== [] && $this->heap[0]->isCancelled()) {
-            $this->removeRoot();
-            $this->staleCount = max(0, $this->staleCount - 1);
-        }
-    }
-
-    private function removeRoot(): Timer
+    private function removeRootBucket(): void
     {
         $root = $this->heap[0];
-        $last = array_pop($this->heap);
+        unset($this->index[pack('d', $root->at)]);
 
-        if ($this->heap !== []) {
-            $this->heap[0] = $last;
-            $this->siftDown(0);
-        }
+        $last = $this->heap[--$this->size];
+        unset($this->heap[$this->size]);
 
-        return $root;
-    }
-
-    /**
-     * 无效条目超过半数时重建堆，避免内存无限膨胀
-     */
-    private function compactIfNeeded(): void
-    {
-        $total = count($this->heap);
-
-        if ($total < 32 || $this->staleCount * 2 < $total) {
+        if ($this->size === 0) {
             return;
         }
 
-        $alive = array_values(array_filter(
-            $this->heap,
-            static fn(Timer $timer): bool => !$timer->isCancelled()
-        ));
+        // 空位下沉：先让空位移到合适深度，最后把末位元素落位
+        $index = 0;
+        $at = $last->at;
+        $half = $this->size >> 1;
 
-        $this->heap = [];
-        $this->staleCount = 0;
+        while ($index < $half) {
+            $child = 2 * $index + 1;
+            $right = $child + 1;
+            $childBucket = $this->heap[$child];
 
-        foreach ($alive as $timer) {
+            if ($right < $this->size) {
+                $rightBucket = $this->heap[$right];
+
+                if ($rightBucket->at < $childBucket->at) {
+                    $child = $right;
+                    $childBucket = $rightBucket;
+                }
+            }
+
+            if ($at <= $childBucket->at) {
+                break;
+            }
+
+            $this->heap[$index] = $childBucket;
+            $index = $child;
+        }
+
+        $this->heap[$index] = $last;
+    }
+
+    /**
+     * 无效条目超过半数时清理，避免内存无限膨胀
+     */
+    private function compactIfNeeded(): void
+    {
+        if ($this->total < 32 || $this->staleCount * 2 < $this->total) {
+            return;
+        }
+
+        $survivors = [];
+
+        for ($i = 0; $i < $this->size; $i++) {
+            $bucket = $this->heap[$i];
+
+            for ($j = $bucket->head; $j < $bucket->tail; $j++) {
+                $timer = $bucket->timers[$j];
+
+                if (!$timer->cancelled) {
+                    $survivors[] = $timer;
+                }
+            }
+        }
+
+        $this->clear();
+
+        foreach ($survivors as $timer) {
             $this->insert($timer);
         }
-    }
-
-    private function siftUp(int $index): void
-    {
-        while ($index > 0) {
-            $parent = intdiv($index - 1, 2);
-
-            if (!$this->less($index, $parent)) {
-                return;
-            }
-
-            $this->swap($index, $parent);
-            $index = $parent;
-        }
-    }
-
-    private function siftDown(int $index): void
-    {
-        $size = count($this->heap);
-
-        while (true) {
-            $left = 2 * $index + 1;
-            $right = $left + 1;
-            $smallest = $index;
-
-            if ($left < $size && $this->less($left, $smallest)) {
-                $smallest = $left;
-            }
-
-            if ($right < $size && $this->less($right, $smallest)) {
-                $smallest = $right;
-            }
-
-            if ($smallest === $index) {
-                return;
-            }
-
-            $this->swap($index, $smallest);
-            $index = $smallest;
-        }
-    }
-
-    private function less(int $a, int $b): bool
-    {
-        $timerA = $this->heap[$a];
-        $timerB = $this->heap[$b];
-
-        if ($timerA->at() !== $timerB->at()) {
-            return $timerA->at() < $timerB->at();
-        }
-
-        // 同一时间点按入堆顺序触发，保证 FIFO 稳定性
-        return $timerA->sequence < $timerB->sequence;
-    }
-
-    private function swap(int $a, int $b): void
-    {
-        [$this->heap[$a], $this->heap[$b]] = [$this->heap[$b], $this->heap[$a]];
     }
 }
