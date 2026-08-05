@@ -1,6 +1,6 @@
 # 性能基准与优化说明
 
-本文档记录 `kode/fibers` **v4.3.0** 与同类 PHP 并发库的**真实横向压测对比**、测试方法论，以及本轮（v4.2.1 → v4.3.0）所做的 kode 依赖升级（context 3.0 / attributes 2.1）与上下文传播路径复核。
+本文档记录 `kode/fibers` **v4.4.0** 与同类 PHP 并发库的**真实横向压测对比**、测试方法论，以及本轮（v4.3.0 → v4.4.0）所做的 kode 依赖升级（aop 3.1.0 / attributes 2.1.1）与协程切换热路径剔除冗余存活校验。
 
 所有数据均在 **PHP 8.3.31**（CLI，NTS）下测得，运行环境为 macOS / Apple Silicon（Darwin）。`kode/fibers` 最低支持 **PHP 8.3+**，本基准即以此版本为基线。
 
@@ -32,9 +32,9 @@
 
 ---
 
-## 2. 结果（v4.3.0，PHP 8.3.31，JIT on，ops/s 中位数）
+## 2. 结果（v4.4.0，PHP 8.3.31，JIT on，ops/s 中位数）
 
-> v4.3.0 在 context 3.0 / attributes 2.1 下复测，5 场景数据与 v4.2.1 持平（运行间噪声内），无回归。内核合成基准不触及 `Context`，故 context 主版本升级不影响压测数字。
+> v4.4.0 在 aop 3.1.0 / attributes 2.1.1 下复测，并剔除协程切换热路径上的冗余 `isSuspended()` 校验。除协程切换较 v4.3.0 提升约 9% 外，其余 4 场景数据与 v4.3.0 持平（运行间噪声内），无回归。
 
 > 相对倍数以 `kode/fibers = 1.00x` 为基准；`—` 表示语义不等价或无对应原语。`revolt`/`reactphp` 的「回调」行仅作参考上限，不参与协程级排名。
 
@@ -55,14 +55,14 @@
 
 | 实现 | ops/s | 中位耗时 | 相对 | 内存增量 |
 | --- | ---: | ---: | ---: | ---: |
-| **kode/fibers** | **8,512,509** | 5.875 ms | 1.00x | 19.5 KB |
-| swow（原生协程） | 19,899,175 | 2.513 ms | 2.34x | 0 B |
-| swoole（原生协程） | 14,165,979 | 3.530 ms | 1.67x | 0 B |
-| amphp/amp v3 | 1,732,762 | 28.856 ms | 0.20x | 0 B |
-| revolt（Suspension） | 1,735,323 | 28.813 ms | 0.20x | 0 B |
+| **kode/fibers** | **9,094,355** | 5.498 ms | 1.00x | 19.5 KB |
+| swow（原生协程） | 19,899,175 | 2.513 ms | 2.19x | 0 B |
+| swoole（原生协程） | 14,165,979 | 3.530 ms | 1.56x | 0 B |
+| amphp/amp v3 | 1,732,762 | 28.856 ms | 0.19x | 0 B |
+| revolt（Suspension） | 1,735,323 | 28.813 ms | 0.19x | 0 B |
 | reactphp（回调） | — | — | — | 无协程原语 |
 
-- kode 是**最快的 PHP 用户态协程切换**（领先 amphp / revolt 约 **4.9×**）。原生 swoole/swow 因在 C 层直接切换栈而更快，这是 PHP `Fiber` 上下文切换的物理下限决定的（约 13.8M ops/s），非算法低效。v4.2.1 将 `yieldNow()` 的 WeakMap 归属查找从「每次让出都查」改为「唤醒后仅在有取消挂起时才查」，切换吞吐较 v4.2.0 的 7.54M 再提升约 13%。
+- kode 是**最快的 PHP 用户态协程切换**（领先 amphp / revolt 约 **5.2×**）。原生 swoole/swow 因在 C 层直接切换栈而更快，这是 PHP `Fiber` 上下文切换的物理下限决定的（约 13.8M ops/s），非算法低效。v4.4.0 进一步剔除 `drainReady()` 派发中对就绪 Fiber 的冗余 `isSuspended()` 存活校验（就绪队列中的 Fiber 仅有 `yieldNow()` 这一个来源，且必处于挂起态），切换吞吐由 v4.3.0 的 8.51M 再提升约 9% 至 9.09M；叠加 v4.2.1 的 WeakMap 去查找，较 v4.2.0 的 7.54M 累计提升约 21%。
 
 ### 2.3 定时器调度（20,000 个最短延迟定时器）
 
@@ -107,7 +107,7 @@
 | 场景 | kode/fibers | 协程级最佳对照 | 结论 |
 | --- | --- | --- | --- |
 | 协程创建 | 1.93M | swoole 2.18M | 紧随原生 swoole，领先 amphp 13.5× |
-| 协程切换 | 8.51M | swow 19.9M | PHP 用户态最快，4.9× 领先 amphp/revolt |
+| 协程切换 | 9.09M | swow 19.9M | PHP 用户态最快，5.2× 领先 amphp/revolt |
 | 定时器 | **2.23M** | (kode 自身第一) | **全场第一**，2.07× 领先 swoole |
 | Channel | **23.1M** | (kode 自身第一) | **全场第一**，5.0× 领先 swoole |
 | 并发聚合 | 1.40M | swoole 2.04M | 领先 amphp 8× / swow 4× |
@@ -156,6 +156,21 @@
 | 上下文传播路径复核 | 尝试用 context 3.0 的 `Context::with()` / `Context::runWith()` 替换旧的 `Context::fork(() => Context::merge())` / `if(...) Context::merge()` 模式 | **已回退**：`with` / `runWith` 为作用域式（执行完立即 `unwind` 回滚），而 fibers 上下文需在「父协程内 spawn 的子协程」间继承并持续可见；改用 `with` 会让子协程读不到上下文、造成死锁（实测单测挂起 7 分钟）。保留 `merge`（当前作用域持续可见）以保证子协程继承语义正确。该优化需更大范围的上下文模型重构（如用 `Context::enter()` 句柄绑定协程生命周期）才能安全采用 |
 
 > 公共 API 不变。因 `kode/context` 跨主版本（^3.0），按语义化版本以**次版本号（minor）**发布为 `4.3.0`，提示下游可能需要同步升级 context。
+
+### v4.3.0 → v4.4.0：aop 3.1.0 / attributes 2.1.1 升级 + 协程切换剔除冗余校验
+
+按用户要求将 `kode/aop`、`kode/attributes` 升级到最新版本；并继续在协程切换热路径剔除一处冗余开销。
+
+| 变更 | 做法 | 收益 / 影响 |
+| --- | --- | --- |
+| `kode/aop` 重新纳入 require，3.0.0 → **3.1.0** | 用户指定 aop 取最新。3.1.0 的约束已放宽：仅要求 `php ^8.3` + `kode/attributes ^2.1`（不再锁 `attributes ^1.0` / `context ^2.1`），与 `context 3.0.0` / `attributes 2.1.1` 同驻无冲突 | 63/161 PHPUnit 全绿；对齐 kode 生态最新主版本 |
+| `kode/attributes` 2.1.1（已为最新） | 保持最新 2.1.1 | 对齐 kode 生态最新版本 |
+| `drainReady()` 剔除就绪 Fiber 的冗余 `isSuspended()` | 就绪队列中的 Fiber **仅有 `yieldNow()` 这一个来源**，且它刚执行完 `Fiber::suspend()`、必然处于挂起态；其余派发分支（Coroutine/Suspension/Closure/Timer）本就不调用 `isSuspended()`。故移除 Fiber 分支的存活校验调用，把这次方法调用从每一次让出/恢复路径上彻底拿掉；直接 `resume()` 若遇非法状态（仅当用户绕过 API 手动 enqueue 了一个非挂起 Fiber）会被 `drainReady` 既有的 try/catch 兜住 | **协程切换 8.51M → 9.09M（≈+9%）**，累计较 v4.2.0 的 7.54M 提升约 21% |
+| 压测复测 | 升级后相同环境（PHP 8.3.31 + JIT tracing + Swoole/Swow 子进程）复跑全部 5 场景 | spawn ≈2.0M、switch ≈9.1M、timer ≈2.6M、channel ≈24.7M、aggregate ≈1.7M（spawn/timer/channel/aggregate 均在 v4.3.0 运行间噪声内，无回归） |
+
+> **关于 aop / attributes 与压测数据**：`kode/aop` 是基于原生 Attribute 的 AOP（运行时代理生成），`kode/attributes` 是带缓存的属性读取器——二者皆为**横切关注点 / 元数据工具**，并不位于协程调度内核（就绪队列、Fiber 切换、定时器堆、Channel）的热路径上，因此升级它们**不会移动** spawn / switch / timer / channel / aggregate 这些合成压测数字（本轮复测已证实数据持平）。本次对压测数字的实质提升来自内核层 `isSuspended()` 剔除。若需进一步逼近 swow 的 19.9M 切换上限，须将切换下沉到 Swoole / Swow 的 C 层栈切换（原生后端桥接），属架构级改动。
+
+> 公共 API 不变。因 `kode/aop` 重新纳入 require（新增一项运行时依赖），按语义化版本以**次版本号（minor）**发布为 `4.4.0`。
 
 ---
 

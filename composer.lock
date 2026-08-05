@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "421e12e361b55b9e79a0ae524b9527d2",
+    "content-hash": "8b3ff7f66c77bf67a28818fd0056ef70",
     "packages": [
         {
             "name": "guzzlehttp/psr7",
@@ -122,6 +122,64 @@
                 }
             ],
             "time": "2026-03-10T16:41:02+00:00"
+        },
+        {
+            "name": "kode/aop",
+            "version": "3.1.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/kodephp/aop.git",
+                "reference": "78570b9c5a20e05fcf1ba7f853ae290b995a9235"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/kodephp/aop/zipball/78570b9c5a20e05fcf1ba7f853ae290b995a9235",
+                "reference": "78570b9c5a20e05fcf1ba7f853ae290b995a9235",
+                "shasum": ""
+            },
+            "require": {
+                "kode/attributes": "^2.1",
+                "php": "^8.3"
+            },
+            "require-dev": {
+                "phpstan/phpstan": "^2.0",
+                "phpunit/phpunit": "^12.0",
+                "squizlabs/php_codesniffer": "^3.6"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Kode\\Aop\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "Apache-2.0"
+            ],
+            "authors": [
+                {
+                    "name": "Kode Team",
+                    "email": "382601296@qq.com"
+                }
+            ],
+            "description": "基于 PHP 8.3+ 原生属性（Attribute）实现的轻量级、高性能、高扩展性 AOP（面向切面编程）组件",
+            "homepage": "https://github.com/kodephp/aop",
+            "keywords": [
+                "aop",
+                "aspect",
+                "attribute",
+                "interceptor",
+                "php83",
+                "php84",
+                "php85",
+                "pointcut",
+                "proxy"
+            ],
+            "support": {
+                "issues": "https://github.com/kodephp/aop/issues",
+                "source": "https://github.com/kodephp/aop/tree/v3.1.0"
+            },
+            "time": "2026-08-05T10:23:09+00:00"
         },
         {
             "name": "kode/attributes",

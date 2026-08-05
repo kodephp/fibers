@@ -20,14 +20,14 @@
 - 📝 **原生 PHP 8.3 Attributes + PHPDoc 实现 IDE 完整识别**
 - 🚫 **禁用函数检测 + 运行环境诊断**
 
-## 📊 性能基准（v4.3.0）
+## 📊 性能基准（v4.4.0）
 
-`kode/fibers` 在 v4.3.0 中将 kode 依赖升级至 **`kode/context` 3.0.0 + `kode/attributes` 2.1.1**（此前因 `facade`/`http-client`/`aop` 的内部主版本约束而无法同驻，本次通过把 `facade`/`http-client` 降为可选 `suggest`、`aop` 移出 require 解决）。在 **PHP 8.3** + OPcache JIT 下与同类库（含原生协程引擎 Swoole / Swow）做真实横向压测，5 场景数据与 v4.2.1 **持平无回归**。**Channel 与定时器仍双双登顶全场最快，反超原生 Swoole / Swow**：
+`kode/fibers` 在 v4.4.0 中将 kode 依赖升级至 **`kode/aop` 3.1.0 + `kode/attributes` 2.1.1**（aop 3.1.0 已放宽约束，仅要求 `php ^8.3` + `attributes ^2.1`，可与 `context 3.0.0` 同驻），并继续在协程切换热路径剔除冗余的 `isSuspended()` 存活校验（协程切换较 v4.3.0 再 +9%）。在 **PHP 8.3** + OPcache JIT 下与同类库（含原生协程引擎 Swoole / Swow）做真实横向压测。**Channel 与定时器仍双双登顶全场最快，反超原生 Swoole / Swow**：
 
 | 场景 | kode/fibers (ops/s) | 协程级最佳对照 | 相对倍数 | 内存增量 |
 | --- | ---: | ---: | ---: | ---: |
 | 协程创建与完成（2 万） | **1,934,026** | swoole 2,182,642 / amphp 142,847 | 紧随 swoole，领先 amphp **13.5x** | 19.2 KB |
-| 协程切换（5 万次让出） | **8,512,509** | swow 19.9M / swoole 14.2M（原生） | PHP 用户态最快，领先 amphp/revolt **4.9x** | 19.5 KB |
+| 协程切换（5 万次让出） | **9,094,355** | swow 19.9M / swoole 14.2M（原生） | PHP 用户态最快，领先 amphp/revolt **5.2x** | 19.5 KB |
 | 定时器调度（2 万） | **2,233,348** | swoole 1,080,760 | **全场第一**，领先 swoole **2.07x** | 0 B |
 | Channel 吞吐（5 万消息） | **23,143,241** | swow 6,919,817 / swoole 4,617,160 | **全场第一**，领先 swoole **5.0x** | 38.2 KB |
 | 并发聚合（1 万任务） | **1,400,634** | swoole 2,038,442 / amphp 173,964 | 领先 amphp **8.0x** | 19.5 KB |

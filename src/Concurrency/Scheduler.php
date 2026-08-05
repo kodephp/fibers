@@ -837,13 +837,14 @@ final class Scheduler
 
                 try {
                     // 按出现频率排序的类型派发。yieldNow() 的零分配快路径投递的是
-                    // Fiber 本体，是紧凑循环里最频繁的一类，放在首位；
-                    // isSuspended() 对已终止的 Fiber 同样返回 false，无需再单独判
-                    // isTerminated()，热路径上少一次方法调用。
+                    // Fiber 本体，是紧凑循环里最频繁的一类，放在首位。
+                    // 就绪队列里的 Fiber 只有 yieldNow() 这一个来源，且它刚执行完
+                    // Fiber::suspend()，必然处于挂起态；因此这里不再调用 isSuspended()
+                    // 做冗余的存活校验——把这次方法调用从每一次让出/恢复路径上彻底拿掉。
+                    // 直接 resume() 若遇非法状态（仅当用户绕过 API 手动 enqueue 了一个
+                    // 非挂起的 Fiber），会被下方的 try/catch 兜住。
                     if ($item instanceof Fiber) {
-                        if ($item->isSuspended()) {
-                            $item->resume();
-                        }
+                        $item->resume();
                     } elseif ($item instanceof Suspension) {
                         $item->dispatch();
                     } elseif ($item instanceof Coroutine) {
