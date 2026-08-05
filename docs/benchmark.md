@@ -1,6 +1,6 @@
 # 性能基准与优化说明
 
-本文档记录 `kode/fibers` **v4.2.1** 与同类 PHP 并发库的**真实横向压测对比**、测试方法论，以及本轮（v4.2.0 → v4.2.1）所做的调度内核热路径优化与依赖刷新。
+本文档记录 `kode/fibers` **v4.3.0** 与同类 PHP 并发库的**真实横向压测对比**、测试方法论，以及本轮（v4.2.1 → v4.3.0）所做的 kode 依赖升级（context 3.0 / attributes 2.1）与上下文传播路径复核。
 
 所有数据均在 **PHP 8.3.31**（CLI，NTS）下测得，运行环境为 macOS / Apple Silicon（Darwin）。`kode/fibers` 最低支持 **PHP 8.3+**，本基准即以此版本为基线。
 
@@ -32,7 +32,9 @@
 
 ---
 
-## 2. 结果（v4.2.1，PHP 8.3.31，JIT on，ops/s 中位数）
+## 2. 结果（v4.3.0，PHP 8.3.31，JIT on，ops/s 中位数）
+
+> v4.3.0 在 context 3.0 / attributes 2.1 下复测，5 场景数据与 v4.2.1 持平（运行间噪声内），无回归。内核合成基准不触及 `Context`，故 context 主版本升级不影响压测数字。
 
 > 相对倍数以 `kode/fibers = 1.00x` 为基准；`—` 表示语义不等价或无对应原语。`revolt`/`reactphp` 的「回调」行仅作参考上限，不参与协程级排名。
 
@@ -100,7 +102,7 @@
 
 ---
 
-## 3. 结论（v4.2.1）
+## 3. 结论（v4.3.0）
 
 | 场景 | kode/fibers | 协程级最佳对照 | 结论 |
 | --- | --- | --- | --- |
@@ -140,6 +142,20 @@
 > **kode 依赖版本说明**：当前 kode 生态的最新版本集合存在内部约束冲突——`kode/facade 3.0.0` 与 `kode/http-client 2.4.0` 仍要求 `kode/context ^2.1`，故 `context` 取最新可用的 **2.3.0**（而非 3.0.0）；`kode/aop 3.0.0` 仍要求 `kode/attributes ^1.0`，故 `attributes` 取最新可用的 **1.2.3**（而非 2.1.1）。最终锁定：`context 2.3.0`、`aop 3.0.0`、`attributes 1.2.3`、`facade 3.0.0`、`http-client 2.4.0`、`console 4.0.0`。公共 API 不受影响。
 
 > 上述改动均为**内部实现优化**，公共 API（`Scheduler::go/enqueue/delay/repeat`、`Timer::cancel/at/isCancelled/isPeriodic`、`Coroutine`、`Channel` 等）向后兼容，按语义化版本规则以**修订号（patch）**发布为 `4.2.1`。
+
+### v4.2.1 → v4.3.0：kode 依赖升级至 context 3.0 / attributes 2.1
+
+按用户要求将 `kode/context`、`kode/attributes` 升级到最新主版本。此前提到的「无法同驻」根因已通过梳理 fibers 真实依赖面解决：
+
+| 变更 | 做法 | 收益 / 影响 |
+| --- | --- | --- |
+| `kode/context` 2.3.0 → **3.0.0** | 用户指定 context 取最新 3.0；3.0.0 仅要求 `php ^8.1`，与 fibers 兼容，`Context::copy/merge/fork/set/clear` API 向后兼容 | 63/161 PHPUnit 全绿；对齐 kode 生态最新主版本 |
+| `kode/attributes` 1.2.3 → **2.1.1** | 用户指定 attributes 取最新 2.1 | 对齐 kode 生态最新版本 |
+| 解开版本约束冲突 | `context 3.0` 长期无法与 `facade 3.0` / `http-client 2.4`（二者仍要求 `context ^2.1`）及 `aop 3.0`（仍要求 `attributes ^1.0`）同驻。核查 fibers 源码：`Kode\Context\Context` 被 7 个文件直接引用（含热路径 `Channel.php`）；`facade` / `http-client` 仅经 `class_exists()` 兜底、有原生降级；`aop` / `attributes` 源码零引用。故将 `aop` 从 require 移除，`facade` / `http-client` 由 require 降为 `suggest`（可选），使 `context ^3.0` 与 `attributes ^2.1` 可同驻 | 依赖图收敛到真实使用面 |
+| 压测复测 | 升级后在相同环境（PHP 8.3.31 + JIT tracing + Swoole/Swow 子进程）复跑全部 5 场景 | **数据持平、无回归**：spawn ≈1.93M、switch ≈8.8M、timer ≈2.0M、channel ≈24.7M、aggregate ≈1.3M（均在 v4.2.1 运行间噪声内）。内核合成基准不触及 `Context`，故 context 3.0 不影响数字 |
+| 上下文传播路径复核 | 尝试用 context 3.0 的 `Context::with()` / `Context::runWith()` 替换旧的 `Context::fork(() => Context::merge())` / `if(...) Context::merge()` 模式 | **已回退**：`with` / `runWith` 为作用域式（执行完立即 `unwind` 回滚），而 fibers 上下文需在「父协程内 spawn 的子协程」间继承并持续可见；改用 `with` 会让子协程读不到上下文、造成死锁（实测单测挂起 7 分钟）。保留 `merge`（当前作用域持续可见）以保证子协程继承语义正确。该优化需更大范围的上下文模型重构（如用 `Context::enter()` 句柄绑定协程生命周期）才能安全采用 |
+
+> 公共 API 不变。因 `kode/context` 跨主版本（^3.0），按语义化版本以**次版本号（minor）**发布为 `4.3.0`，提示下游可能需要同步升级 context。
 
 ---
 

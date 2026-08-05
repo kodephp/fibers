@@ -20,9 +20,9 @@
 - 📝 **原生 PHP 8.3 Attributes + PHPDoc 实现 IDE 完整识别**
 - 🚫 **禁用函数检测 + 运行环境诊断**
 
-## 📊 性能基准（v4.2.1）
+## 📊 性能基准（v4.3.0）
 
-`kode/fibers` 在 v4.2.1 中将 `yieldNow()` 的 WeakMap 归属查找从「每次让出都查」改为「唤醒后仅在有取消挂起时才查」（无取消的绝大多数让出路径彻底省掉这次哈希查找），协程切换吞吐较 v4.2.0 再提升约 **13%**；并刷新全部 kode 依赖至当前可解析的最新版本。在 **PHP 8.3** + OPcache JIT 下与同类库（含原生协程引擎 Swoole / Swow）做真实横向压测。**Channel 与定时器双双登顶全场最快，反超原生 Swoole / Swow**：
+`kode/fibers` 在 v4.3.0 中将 kode 依赖升级至 **`kode/context` 3.0.0 + `kode/attributes` 2.1.1**（此前因 `facade`/`http-client`/`aop` 的内部主版本约束而无法同驻，本次通过把 `facade`/`http-client` 降为可选 `suggest`、`aop` 移出 require 解决）。在 **PHP 8.3** + OPcache JIT 下与同类库（含原生协程引擎 Swoole / Swow）做真实横向压测，5 场景数据与 v4.2.1 **持平无回归**。**Channel 与定时器仍双双登顶全场最快，反超原生 Swoole / Swow**：
 
 | 场景 | kode/fibers (ops/s) | 协程级最佳对照 | 相对倍数 | 内存增量 |
 | --- | ---: | ---: | ---: | ---: |
