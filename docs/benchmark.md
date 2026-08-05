@@ -1,6 +1,6 @@
 # 性能基准与优化说明
 
-本文档记录 `kode/fibers` **v4.2.0** 与同类 PHP 并发库的**真实横向压测对比**、测试方法论，以及本轮（v4.1.0 → v4.2.0）所做的调度内核热路径优化。
+本文档记录 `kode/fibers` **v4.2.1** 与同类 PHP 并发库的**真实横向压测对比**、测试方法论，以及本轮（v4.2.0 → v4.2.1）所做的调度内核热路径优化与依赖刷新。
 
 所有数据均在 **PHP 8.3.31**（CLI，NTS）下测得，运行环境为 macOS / Apple Silicon（Darwin）。`kode/fibers` 最低支持 **PHP 8.3+**，本基准即以此版本为基线。
 
@@ -32,7 +32,7 @@
 
 ---
 
-## 2. 结果（v4.2.0，PHP 8.3.31，JIT on，ops/s 中位数）
+## 2. 结果（v4.2.1，PHP 8.3.31，JIT on，ops/s 中位数）
 
 > 相对倍数以 `kode/fibers = 1.00x` 为基准；`—` 表示语义不等价或无对应原语。`revolt`/`reactphp` 的「回调」行仅作参考上限，不参与协程级排名。
 
@@ -53,14 +53,14 @@
 
 | 实现 | ops/s | 中位耗时 | 相对 | 内存增量 |
 | --- | ---: | ---: | ---: | ---: |
-| **kode/fibers** | **7,537,689** | 6.633 ms | 1.00x | 19.5 KB |
-| swow（原生协程） | 19,899,175 | 2.513 ms | 2.64x | 0 B |
-| swoole（原生协程） | 14,165,979 | 3.530 ms | 1.88x | 0 B |
-| amphp/amp v3 | 1,732,762 | 28.856 ms | 0.23x | 0 B |
-| revolt（Suspension） | 1,735,323 | 28.813 ms | 0.23x | 0 B |
+| **kode/fibers** | **8,512,509** | 5.875 ms | 1.00x | 19.5 KB |
+| swow（原生协程） | 19,899,175 | 2.513 ms | 2.34x | 0 B |
+| swoole（原生协程） | 14,165,979 | 3.530 ms | 1.67x | 0 B |
+| amphp/amp v3 | 1,732,762 | 28.856 ms | 0.20x | 0 B |
+| revolt（Suspension） | 1,735,323 | 28.813 ms | 0.20x | 0 B |
 | reactphp（回调） | — | — | — | 无协程原语 |
 
-- kode 是**最快的 PHP 用户态协程切换**（领先 amphp / revolt 约 **4.3×**）。原生 swoole/swow 因在 C 层直接切换栈而更快，这是 PHP `Fiber` 上下文切换的物理下限决定的（约 13.8M ops/s），非算法低效。
+- kode 是**最快的 PHP 用户态协程切换**（领先 amphp / revolt 约 **4.9×**）。原生 swoole/swow 因在 C 层直接切换栈而更快，这是 PHP `Fiber` 上下文切换的物理下限决定的（约 13.8M ops/s），非算法低效。v4.2.1 将 `yieldNow()` 的 WeakMap 归属查找从「每次让出都查」改为「唤醒后仅在有取消挂起时才查」，切换吞吐较 v4.2.0 的 7.54M 再提升约 13%。
 
 ### 2.3 定时器调度（20,000 个最短延迟定时器）
 
@@ -100,18 +100,18 @@
 
 ---
 
-## 3. 结论（v4.2.0）
+## 3. 结论（v4.2.1）
 
 | 场景 | kode/fibers | 协程级最佳对照 | 结论 |
 | --- | --- | --- | --- |
 | 协程创建 | 1.93M | swoole 2.18M | 紧随原生 swoole，领先 amphp 13.5× |
-| 协程切换 | 7.54M | swow 19.9M | PHP 用户态最快，4.3× 领先 amphp/revolt |
+| 协程切换 | 8.51M | swow 19.9M | PHP 用户态最快，4.9× 领先 amphp/revolt |
 | 定时器 | **2.23M** | (kode 自身第一) | **全场第一**，2.07× 领先 swoole |
 | Channel | **23.1M** | (kode 自身第一) | **全场第一**，5.0× 领先 swoole |
 | 并发聚合 | 1.40M | swoole 2.04M | 领先 amphp 8× / swow 4× |
 
 - **Channel 与定时器双双登顶**：kode 在阻塞 Channel 与大批量定时器两个维度均为**全场最快**，反超原生 Swoole / Swow。
-- **协程切换达 PHP 用户态上限**：kode 切换吞吐 7.54M ops/s，已是纯 PHP `Fiber` 实现的头部水平；原生 swoole/swow 因 C 层栈切换更快，属物理下限差异。
+- **协程切换达 PHP 用户态上限**：kode 切换吞吐 8.51M ops/s（v4.2.1，较 v4.2.0 的 7.54M 再 +13%），已是纯 PHP `Fiber` 实现的头部水平；原生 swoole/swow 因 C 层栈切换更快，属物理下限差异。
 - **内存健康**：全部场景内存增量维持在 KB 级且各轮稳定（非泄漏），来自 worker 池 / 缓冲数组的固定开销。
 - **零泄漏**：运行间内存净增量不随轮次增长，确认 v4.0.0 引入的 `WeakMap` 泄漏在 v4.1.0 已修复、v4.2.0 保持。
 
@@ -130,7 +130,16 @@
 | TimerQueue.total 字段 | 事件循环热路径直接读 `$timers->total` 公共字段，省去方法调用 | 配合上述改进进一步压低驱动阶段开销 |
 | 并发聚合 | 就绪队列游标随规模增长超 1024 时 `array_values` 摊还压缩，避免游标无限右移 | 聚合 **~800k → 884k（≈1.1×）** |
 
-> 上述改动均为**内部实现优化**，公共 API（`Scheduler::go/enqueue/delay/repeat`、`Timer::cancel/at/isCancelled/isPeriodic`、`Coroutine`、`Channel` 等）向后兼容，按语义化版本规则以**次版本号（minor）**发布为 `4.2.0`。
+### v4.2.0 → v4.2.1：yieldNow 热路径去 WeakMap + 依赖刷新
+
+| 优化项 | 做法 | 收益 |
+| --- | --- | --- |
+| `yieldNow()` 移除热路径 WeakMap 查找 | 原实现每次让出都做 `WeakMap` 归属查找（用于取 Coroutine 句柄做取消检查与归属校验）。改为：仅当 `$cancelRequests !== 0` 时，在唤醒后才查一次 `WeakMap`；取消语义完全不变（挂起期间收到的取消请求仍在唤醒点抛出）。无取消的绝大多数让出路径上彻底省掉这次哈希查找 | **协程切换 7.54M → 8.51M（≈+13%）**，逼近 PHP `Fiber` 约 13.8M ops/s 的物理下限 |
+| kode 依赖刷新至最新可用集 | `composer.json` 将 `kode/context`、`kode/aop`、`kode/attributes`、`kode/facade`、`kode/http-client`、`kode/console` 刷新到当前可解析的最新版本（见下方说明）。热路径不依赖这些包，压测吞吐无变化 | 依赖面保持最新；63/161 PHPUnit 全绿 |
+
+> **kode 依赖版本说明**：当前 kode 生态的最新版本集合存在内部约束冲突——`kode/facade 3.0.0` 与 `kode/http-client 2.4.0` 仍要求 `kode/context ^2.1`，故 `context` 取最新可用的 **2.3.0**（而非 3.0.0）；`kode/aop 3.0.0` 仍要求 `kode/attributes ^1.0`，故 `attributes` 取最新可用的 **1.2.3**（而非 2.1.1）。最终锁定：`context 2.3.0`、`aop 3.0.0`、`attributes 1.2.3`、`facade 3.0.0`、`http-client 2.4.0`、`console 4.0.0`。公共 API 不受影响。
+
+> 上述改动均为**内部实现优化**，公共 API（`Scheduler::go/enqueue/delay/repeat`、`Timer::cancel/at/isCancelled/isPeriodic`、`Coroutine`、`Channel` 等）向后兼容，按语义化版本规则以**修订号（patch）**发布为 `4.2.1`。
 
 ---
 

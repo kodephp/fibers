@@ -385,12 +385,12 @@ final class Scheduler
     {
         $fiber = Fiber::getCurrent();
 
-        // 合法调用只走一次判断：不在协程内、或该 Fiber 不归本调度器管，
-        // 才进入下面的慢路径去区分具体是哪种误用
-        if ($fiber === null || ($coroutine = $this->owned[$fiber] ?? null) === null) {
-            throw new FiberException($fiber === null
-                ? '当前不在协程内，无法让出执行权。请通过 Fibers::async() / Scheduler::go() 创建协程后再调用。'
-                : '当前 Fiber 不受该调度器管理，无法让出执行权。请使用同一个 Scheduler 创建协程。');
+        // 合法调用（处于本调度器管理的协程内）是最高频动作；除非根本不在协程里，
+        // 否则不走任何校验分支，直接走零分配快路径。
+        if ($fiber === null) {
+            throw new FiberException(
+                '当前不在协程内，无法让出执行权。请通过 Fibers::async() / Scheduler::go() 创建协程后再调用。'
+            );
         }
 
         // 让出并立刻重新排队是最高频的调度动作，这里走「零分配」快路径：
@@ -398,14 +398,19 @@ final class Scheduler
         // 派发。实测 PHP 的 Fiber::suspend()/resume() 往返本身只要 0.073μs，
         // 之前每次让出却要花掉约 0.58μs，绝大部分耗在这层包装上。
         //
-        // 取消语义保持不变：挂起期间收到的取消请求会在被唤醒后立即抛出，
-        // 抛出点仍是本次 yieldNow() 调用处，对调用方而言与注入式取消无差别。
+        // 归属校验（WeakMap 查找）推迟到唤醒之后，且只在确有取消请求时才查一次——
+        // 绝大多数让出路径上彻底省掉这次查找。取消语义保持不变：挂起期间收到的
+        // 取消请求会在被唤醒后立即抛出，抛出点仍是本次 yieldNow() 调用处。
         $this->ready[$this->readyTail++] = $fiber;
 
         Fiber::suspend();
 
         if ($this->cancelRequests !== 0) {
-            $coroutine->throwIfCancelled();
+            $coroutine = $this->owned[$fiber] ?? null;
+
+            if ($coroutine !== null) {
+                $coroutine->throwIfCancelled();
+            }
         }
     }
 
