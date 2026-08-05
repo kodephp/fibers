@@ -38,9 +38,22 @@ class Channel
     /**
      * 缓冲区消息队列
      *
-     * @var list<mixed>
+     * 以「游标队列」而非 list 方式使用：出队只推进 {@see self::$head}，
+     * 避免 array_shift() 每次重排整个数组（缓冲越大越致命）。
+     *
+     * @var array<int, mixed>
      */
     protected array $messages = [];
+
+    /**
+     * 缓冲区队头游标（下一个待出队元素的下标）
+     */
+    private int $head = 0;
+
+    /**
+     * 缓冲区队尾游标（下一个入队元素的下标）
+     */
+    private int $tail = 0;
 
     /**
      * 等待发送的协程
@@ -112,12 +125,17 @@ class Channel
             throw new FiberException('Channel is closed');
         }
 
-        if ($this->deliverToReceiver($message)) {
-            return true;
-        }
+        // 无等待接收者时直接落缓冲，省掉一次方法调用（有缓冲通道的绝对热路径）
+        if ($this->receivers === []) {
+            if ($this->tail - $this->head < $this->bufferSize) {
+                $this->messages[$this->tail++] = $message;
 
-        if (count($this->messages) < $this->bufferSize) {
-            $this->messages[] = $message;
+                return true;
+            }
+        } elseif ($this->deliverToReceiver($message)) {
+            return true;
+        } elseif ($this->tail - $this->head < $this->bufferSize) {
+            $this->messages[$this->tail++] = $message;
 
             return true;
         }
@@ -155,12 +173,12 @@ class Channel
             return false;
         }
 
-        if ($this->deliverToReceiver($message)) {
+        if ($this->receivers !== [] && $this->deliverToReceiver($message)) {
             return true;
         }
 
-        if (count($this->messages) < $this->bufferSize) {
-            $this->messages[] = $message;
+        if ($this->tail - $this->head < $this->bufferSize) {
+            $this->messages[$this->tail++] = $message;
 
             return true;
         }
@@ -178,7 +196,32 @@ class Channel
      */
     public function pop(?float $timeout = null): mixed
     {
-        if ($this->tryPop($message)) {
+        // 内联出队快路径：缓冲区有货时不走 tryPop() 的方法调用与引用出参
+        $head = $this->head;
+
+        if ($head !== $this->tail) {
+            $message = $this->messages[$head];
+            unset($this->messages[$head]);
+            $this->head = ++$head;
+
+            if ($head === $this->tail) {
+                $this->messages = [];
+                $this->head = 0;
+                $this->tail = 0;
+            } elseif ($head >= 1024 && $head > $this->tail - $head) {
+                $this->messages = array_values($this->messages);
+                $this->tail -= $head;
+                $this->head = 0;
+            }
+
+            if ($this->senders !== []) {
+                $this->promoteWaitingSender();
+            }
+
+            return $message;
+        }
+
+        if ($this->senders !== [] && $this->tryPop($message)) {
             return $message;
         }
 
@@ -219,9 +262,28 @@ class Channel
      */
     public function tryPop(mixed &$message = null): bool
     {
-        if ($this->messages !== []) {
-            $message = array_shift($this->messages);
-            $this->promoteWaitingSender();
+        $head = $this->head;
+
+        if ($head !== $this->tail) {
+            $message = $this->messages[$head];
+            unset($this->messages[$head]);
+            $this->head = ++$head;
+
+            if ($head === $this->tail) {
+                // 缓冲排空：连同底层数组与游标一起归零，下标不会无限增长
+                $this->messages = [];
+                $this->head = 0;
+                $this->tail = 0;
+            } elseif ($head >= 1024 && $head > $this->tail - $head) {
+                // 长期不排空时，按摊还 O(1) 的代价压缩一次，回收已出队留下的空洞
+                $this->messages = array_values($this->messages);
+                $this->tail -= $head;
+                $this->head = 0;
+            }
+
+            if ($this->senders !== []) {
+                $this->promoteWaitingSender();
+            }
 
             return true;
         }
@@ -357,7 +419,7 @@ class Channel
      */
     public function length(): int
     {
-        return count($this->messages);
+        return $this->tail - $this->head;
     }
 
     /**
@@ -373,7 +435,7 @@ class Channel
      */
     public function isFull(): bool
     {
-        return count($this->messages) >= $this->bufferSize;
+        return $this->tail - $this->head >= $this->bufferSize;
     }
 
     /**
@@ -381,7 +443,7 @@ class Channel
      */
     public function isEmpty(): bool
     {
-        return $this->messages === [];
+        return $this->head === $this->tail;
     }
 
     /**
@@ -487,7 +549,7 @@ class Channel
                 continue;
             }
 
-            $this->messages[] = $sender['message'];
+            $this->messages[$this->tail++] = $sender['message'];
             $sender['suspension']->resume(true);
 
             return;

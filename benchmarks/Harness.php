@@ -60,6 +60,17 @@ final class Harness
     }
 
     /**
+     * 直接登记一份「外部测得」的结果
+     *
+     * 用于 Swoole / Swow 这类必须在独立子进程中测量的实现（两者在 Zend 层互斥，
+     * 无法与彼此共存于同一进程），由子进程完成计时后回填到同一张对比表。
+     */
+    public function record(string $scenario, string $impl, int $ops, float $median, int $memory = 0): void
+    {
+        $this->results[$scenario][$impl] = new Result($impl, $ops, $median, $median, $memory);
+    }
+
+    /**
      * 记录一个不适用/跳过的实现，保持表格列对齐
      */
     public function skip(string $scenario, string $impl, string $reason): void

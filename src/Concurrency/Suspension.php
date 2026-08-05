@@ -120,7 +120,9 @@ final class Suspension
     {
         $fiber = $this->fiber;
 
-        if ($fiber->isTerminated() || !$fiber->isSuspended()) {
+        // isSuspended() 已经排除了「未启动 / 运行中 / 已终止」三种状态，
+        // 再叠一次 isTerminated() 只是白白多一次方法调用
+        if (!$fiber->isSuspended()) {
             return;
         }
 

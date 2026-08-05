@@ -42,6 +42,121 @@ echo "kode/fibers 横向压测\n";
 echo 'PHP ' . PHP_VERSION . ' | ' . PHP_OS_FAMILY . " | 5 轮取中位数（预热 2 轮）\n";
 
 // ---------------------------------------------------------------------------
+// 原生协程引擎（Swoole / Swow）
+//
+// 这两个扩展都会接管 Zend VM 的栈切换，同一进程内互斥且无法与本进程共存，
+// 因此统一以「独立子进程 + 只加载单一扩展」的方式测量，再汇总到同一张表。
+// 可通过环境变量 BENCH_SWOOLE_EXT / BENCH_SWOW_EXT 指定 .so 路径。
+// ---------------------------------------------------------------------------
+
+/**
+ * 在常见安装目录中定位扩展的 .so 文件
+ */
+$locateExtension = static function (string $name): ?string {
+    $env = getenv('BENCH_' . strtoupper($name) . '_EXT');
+
+    if (is_string($env) && $env !== '' && is_file($env)) {
+        return $env;
+    }
+
+    $candidates = [];
+    $extensionDir = (string) ini_get('extension_dir');
+
+    if ($extensionDir !== '') {
+        $candidates[] = rtrim($extensionDir, '/') . '/' . $name . '.so';
+    }
+
+    foreach ([
+        '/opt/homebrew/Cellar/php*/*/pecl/*/',
+        '/usr/local/Cellar/php*/*/pecl/*/',
+        '/usr/lib/php/*/',
+        '/usr/lib64/php/modules/',
+    ] as $pattern) {
+        foreach (glob($pattern . $name . '.so') ?: [] as $path) {
+            $candidates[] = $path;
+        }
+    }
+
+    foreach ($candidates as $candidate) {
+        if (is_file($candidate)) {
+            return $candidate;
+        }
+    }
+
+    return null;
+};
+
+$nativeEngines = [
+    'swoole' => ['label' => 'swoole (原生协程)', 'ext' => $locateExtension('swoole')],
+    'swow' => ['label' => 'swow (原生协程)', 'ext' => $locateExtension('swow')],
+];
+
+/**
+ * 以子进程方式跑一个原生引擎的单场景，并把结果写回 harness
+ */
+$measureNative = static function (
+    string $scenario,
+    string $scenarioLabel,
+    int $ops,
+) use ($harness, $nativeEngines): void {
+    foreach ($nativeEngines as $engine => $meta) {
+        if ($meta['ext'] === null) {
+            $harness->skip($scenarioLabel, $meta['label'], '未安装扩展');
+
+            continue;
+        }
+
+        $command = sprintf(
+            '%s -d extension=%s %s %s %s %d 2>&1',
+            escapeshellarg(PHP_BINARY),
+            escapeshellarg($meta['ext']),
+            escapeshellarg(__DIR__ . '/bench_native_worker.php'),
+            escapeshellarg($engine),
+            escapeshellarg($scenario),
+            $ops,
+        );
+
+        $output = (string) shell_exec($command);
+        $line = '';
+
+        foreach (array_reverse(explode("\n", trim($output))) as $candidate) {
+            $candidate = trim($candidate);
+
+            if (str_starts_with($candidate, 'OK ')
+                || str_starts_with($candidate, 'SKIP ')
+                || str_starts_with($candidate, 'FAIL ')) {
+                $line = $candidate;
+
+                break;
+            }
+        }
+
+        if (str_starts_with($line, 'OK ')) {
+            [, $median, $memory] = array_pad(explode(' ', $line), 3, '0');
+            $harness->record($scenarioLabel, $meta['label'], $ops, (float) $median, (int) $memory);
+
+            continue;
+        }
+
+        if (str_starts_with($line, 'SKIP ')) {
+            $harness->skip($scenarioLabel, $meta['label'], substr($line, 5));
+
+            continue;
+        }
+
+        $harness->skip($scenarioLabel, $meta['label'], $line === '' ? '子进程无输出' : substr($line, 5));
+    }
+};
+
+$detected = [];
+
+foreach ($nativeEngines as $engine => $meta) {
+    $detected[] = $engine . ': ' . ($meta['ext'] ?? '未检测到');
+}
+
+echo '原生引擎 | ' . implode(' | ', $detected) . "\n";
+
+// ---------------------------------------------------------------------------
 // 场景 1：协程创建与完成
 // 从「创建」到「全部跑完」的端到端吞吐，反映调度器的任务分发成本
 // ---------------------------------------------------------------------------
@@ -95,6 +210,8 @@ if ($wants('spawn')) {
 
         Loop::run();
     });
+
+    $measureNative('spawn', $scenario, $n);
 }
 
 // ---------------------------------------------------------------------------
@@ -103,7 +220,7 @@ if ($wants('spawn')) {
 // ---------------------------------------------------------------------------
 if ($wants('switch')) {
     $n = 50_000;
-    $scenario = "协程切换（单协程让出 {$n} 次）";
+    $scenario = "协程切换（{$n} 次让出/唤醒）";
 
     $harness->measure($scenario, 'kode/fibers', $n, static function () use ($n): void {
         $scheduler = new Scheduler();
@@ -143,6 +260,8 @@ if ($wants('switch')) {
     });
 
     $harness->skip($scenario, 'reactphp (回调)', '无协程原语');
+
+    $measureNative('switch', $scenario, $n);
 }
 
 // ---------------------------------------------------------------------------
@@ -151,7 +270,9 @@ if ($wants('switch')) {
 // ---------------------------------------------------------------------------
 if ($wants('timer')) {
     $n = 20_000;
-    $scenario = "定时器调度（{$n} 个 0 延迟定时器）";
+    // Swoole 定时器最小粒度为 1ms，Swow 无独立定时器 API（走 msleep(0)），
+    // 因此统一表述为「最短延迟」而非严格 0 延迟
+    $scenario = "定时器调度（{$n} 个最短延迟定时器）";
 
     $harness->measure($scenario, 'kode/fibers', $n, static function () use ($n): void {
         $scheduler = new Scheduler();
@@ -189,6 +310,8 @@ if ($wants('timer')) {
 
         Loop::run();
     });
+
+    $measureNative('timer', $scenario, $n);
 }
 
 // ---------------------------------------------------------------------------
@@ -246,6 +369,8 @@ if ($wants('channel')) {
     });
 
     $harness->skip($scenario, 'reactphp', '无阻塞 Channel');
+
+    $measureNative('channel', $scenario, $n);
 }
 
 // ---------------------------------------------------------------------------
@@ -286,6 +411,8 @@ if ($wants('aggregate')) {
     });
 
     $harness->skip($scenario, 'reactphp', '需 Promise 组合，语义不等价');
+
+    $measureNative('aggregate', $scenario, $n);
 }
 
 $harness->report();

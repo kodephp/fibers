@@ -26,9 +26,14 @@ use WeakMap;
 final class FiberLocal
 {
     /**
-     * Fiber => 值
+     * 执行上下文 => 值
      *
-     * @var WeakMap<Fiber, array{0: mixed}>
+     * 键优先取「协程句柄」而非 Fiber：调度器会复用 Fiber（见 Scheduler 的复用
+     * 池），同一个 Fiber 先后承载多个互不相关的协程，若以 Fiber 为键，前一个
+     * 协程写入的值会泄漏给后一个。以协程为键则天然随协程结束一起回收。
+     * 不在受管协程内（裸 Fiber）时退回按 Fiber 隔离。
+     *
+     * @var WeakMap<object, array{0: mixed}>
      */
     private WeakMap $storage;
 
@@ -54,9 +59,9 @@ final class FiberLocal
      */
     public function get(): mixed
     {
-        $fiber = Fiber::getCurrent();
+        $context = self::context();
 
-        if ($fiber === null) {
+        if ($context === null) {
             if ($this->mainValue === null) {
                 $this->mainValue = [$this->initialize()];
             }
@@ -64,11 +69,11 @@ final class FiberLocal
             return $this->mainValue[0];
         }
 
-        if (!isset($this->storage[$fiber])) {
-            $this->storage[$fiber] = [$this->initialize()];
+        if (!isset($this->storage[$context])) {
+            $this->storage[$context] = [$this->initialize()];
         }
 
-        return $this->storage[$fiber][0];
+        return $this->storage[$context][0];
     }
 
     /**
@@ -76,15 +81,15 @@ final class FiberLocal
      */
     public function set(mixed $value): void
     {
-        $fiber = Fiber::getCurrent();
+        $context = self::context();
 
-        if ($fiber === null) {
+        if ($context === null) {
             $this->mainValue = [$value];
 
             return;
         }
 
-        $this->storage[$fiber] = [$value];
+        $this->storage[$context] = [$value];
     }
 
     /**
@@ -92,11 +97,11 @@ final class FiberLocal
      */
     public function has(): bool
     {
-        $fiber = Fiber::getCurrent();
+        $context = self::context();
 
-        return $fiber === null
+        return $context === null
             ? $this->mainValue !== null
-            : isset($this->storage[$fiber]);
+            : isset($this->storage[$context]);
     }
 
     /**
@@ -104,15 +109,29 @@ final class FiberLocal
      */
     public function unset(): void
     {
-        $fiber = Fiber::getCurrent();
+        $context = self::context();
 
-        if ($fiber === null) {
+        if ($context === null) {
             $this->mainValue = null;
 
             return;
         }
 
-        unset($this->storage[$fiber]);
+        unset($this->storage[$context]);
+    }
+
+    /**
+     * 当前执行上下文：受管协程优先，其次是裸 Fiber，主协程为 null
+     */
+    private static function context(): ?object
+    {
+        $fiber = Fiber::getCurrent();
+
+        if ($fiber === null) {
+            return null;
+        }
+
+        return Scheduler::current()?->currentCoroutine() ?? $fiber;
     }
 
     /**
