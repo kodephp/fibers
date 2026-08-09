@@ -20,9 +20,9 @@
 - 📝 **原生 PHP 8.3 Attributes + PHPDoc 实现 IDE 完整识别**
 - 🚫 **禁用函数检测 + 运行环境诊断**
 
-## 📊 性能基准（v4.5.0）
+## 📊 性能基准（v4.6.0）
 
-`kode/fibers` 在 v4.5.0 中**移除了源码零引用的 `kode/aop` 与 `kode/attributes` 依赖**（依赖面收敛为 `kode/context` / `kode/console` / `guzzlehttp/psr7`），包体更轻、安装更快、攻击面更小；调度内核未改动，性能与 v4.4.0 持平（协程切换 ~9.1M、Channel ~24M、定时器 ~2.2M，均为 PHP 用户态最快 / 全场第一）。本库是**纯 PHP、零 C 扩展**的协程调度器，基于 PHP 官方 `Fiber` 原语实现，是 Swoole / Swow 之外的**官方另一条协程路线**——若你的场景追求极限原生吞吐且可接受扩展依赖，可直接选用 Swoole / Swow；若你更看重零扩展、框架原生、可静态分析与跨平台一致，本库即为此而生。在 **PHP 8.3** + OPcache JIT 下与同类库（含原生协程引擎 Swoole / Swow）做真实横向压测，**Channel 与定时器双双登顶全场最快，反超原生 Swoole / Swow**：
+`kode/fibers` 在 v4.6.0 中**加固了安全性并清理了死代码**：删除了加载即崩溃的 `EnableFibers` 中间件、零引用的 `TaskMutex` 与 `WebmanServiceProvider`、以及伪装实现的 `ProtobufProtocol`；修复了文件事务存储的路径穿越、WebSocket 握手缺失校验与跨站劫持面、RPC/WebSocket 内部错误信息外泄、数据库存储的跨驱动 DDL/UPSERT 与命令注入等隐患。**调度内核未改动，性能与 v4.5.0 持平**（协程切换 ~9.1M、Channel ~24M、定时器 ~2.2M，均为 PHP 用户态最快 / 全场第一）。本库是**纯 PHP、零 C 扩展**的协程调度器，基于 PHP 官方 `Fiber` 原语实现，是 Swoole / Swow 之外的**官方另一条协程路线**——若你的场景追求极限原生吞吐且可接受扩展依赖，可直接选用 Swoole / Swow；若你更看重零扩展、框架原生、可静态分析与跨平台一致，本库即为此而生。在 **PHP 8.3** + OPcache JIT 下与同类库（含原生协程引擎 Swoole / Swow）做真实横向压测，**Channel 与定时器双双登顶全场最快，反超原生 Swoole / Swow**：
 
 | 场景 | kode/fibers (ops/s) | 协程级最佳对照 | 相对倍数 | 内存增量 |
 | --- | ---: | ---: | ---: | ---: |
@@ -48,6 +48,19 @@
 - 🔁 **与 Swoole / Swow 互补**：二者在 Zend VM 钩子上以 C 层切换栈，原始吞吐更高（协程切换约 14–20M ops/s）；本库则在 `Fiber` 用户态下做到同类最快（切换 ~9M、Channel ~24M、定时器 ~2.2M）。按部署约束与吞吐需求自由取舍——**更多选择，而非单一绑定**。
 
 > 💡 需要极限原生吞吐？直接 `composer require swoole` / `swow` 并在其协程环境中使用 `kode/fibers` 的运行时桥接（`RuntimeBridge`）；更看重轻量与一致性？仅 `composer require kode/fibers` 即可。
+
+## 🔒 安全性与健壮性
+
+v4.6.0 起，库在「性能」之外把**安全性**与**健壮性**列为同等优先的一等公民。已落实的加固：
+
+- **路径穿越防护**：`FileTransactionStorage` 对事务 ID 做强校验（仅 `[A-Za-z0-9._-]`），并经 `basename` 兜底，记录文件始终落在指定目录内。
+- **SQL 注入防护**：`DatabaseTransactionStorage` 的表名经正则白名单校验；建表 / UPSERT 按驱动（MySQL / SQLite / PostgreSQL）分支生成，不再依赖单一方言。
+- **命令注入防护**：`Php85Features::pipeExecute()` 改为以数组形式直接交给 `proc_open`（**不经 shell**），从根本上消除注入面。
+- **信息泄露防护**：RPC / WebSocket 服务端不再向客户端回传内部异常详情（统一返回 `Internal error`）。
+- **握手与跨站防护**：`WebSocketServer` 校验 `Upgrade / Connection / Sec-WebSocket-Version`，并支持 `setAllowedOrigins()` 配置 Origin 白名单（防御 CSWSH）；读取请求头增加了行数 / 长度上限，避免内存耗尽。
+- **死代码清理**：移除加载即崩溃的 `EnableFibers` 中间件（缺失 `psr/http-server-middleware` 依赖）、零引用的 `TaskMutex` 与 `WebmanServiceProvider`、以及伪装实现的 `ProtobufProtocol`；`IntegrationManager` 修正了服务提供者命名空间映射并移除 `eval`。
+
+> 凡涉及网络监听的组件（`RpcServer` / `WebSocketServer` / `WebUI`）默认绑定 `0.0.0.0` 且不带鉴权。生产环境请置于反向代理 / 防火墙之后，并对 WebSocket 配置 `setAllowedOrigins()`。
 
 ## ⚙️ PHP 8.5 兼容与便捷 API
 
@@ -810,7 +823,7 @@ if ($client->isUsingNativeDriver()) {
 - [x] **连接池支持**：`ConnectionPool` 支持 PDO、Redis 连接池管理
 - [x] **协程调试器**：`FiberDebugger` 支持断点、日志、状态监控
 - [x] **PHP 8.5 特性支持**：`Php85Features` 自动适配新特性
-- [x] **多框架支持**：Laravel、Lumen、Symfony、Hyperf、Webman、Yii3、ThinkPHP8
+- [x] **多框架支持**：Laravel、Lumen、Symfony、Hyperf、Yii3、ThinkPHP8
 
 详细开发计划见 [路线图文档](docs/roadmap.md)。
 

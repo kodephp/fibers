@@ -1,6 +1,6 @@
 # 性能基准与优化说明
 
-本文档记录 `kode/fibers` **v4.5.0** 与同类 PHP 并发库的**真实横向压测对比**、测试方法论，以及本轮（v4.4.0 → v4.5.0）所做的**依赖精简**（移除源码零引用的 `kode/aop` 与 `kode/attributes`，仅保留 `kode/context` / `kode/console` / `guzzlehttp/psr7`）与**定位澄清**（纯 PHP `Fiber` 官方协程方案，与 Swoole / Swow 互补）。
+本文档记录 `kode/fibers` **v4.6.0** 与同类 PHP 并发库的**真实横向压测对比**、测试方法论，以及本轮（v4.5.0 → v4.6.0）所做的**安全性加固与死代码清理**（路径穿越防护、SQL/命令注入防护、RPC/WebSocket 信息泄露与握手校验、跨驱动 DDL/UPSERT 修复；移除 `EnableFibers` / `TaskMutex` / `WebmanServiceProvider` / 伪 `ProtobufProtocol` 等死代码）。**调度内核未改动，性能与 v4.5.0 持平**（Channel、定时器仍全场第一，协程切换仍为 PHP 用户态最快）。
 
 所有数据均在 **PHP 8.3.31**（CLI，NTS）下测得，运行环境为 macOS / Apple Silicon（Darwin）。`kode/fibers` 最低支持 **PHP 8.3+**，本基准即以此版本为基线。
 
@@ -41,9 +41,9 @@
 
 ---
 
-## 2. 结果（v4.5.0，PHP 8.3.31，JIT on，ops/s 中位数）
+## 2. 结果（v4.6.0，PHP 8.3.31，JIT on，ops/s 中位数）
 
-> v4.5.0 相较 v4.4.0 **仅精简依赖、未改动调度内核**，故 5 个场景压测数据与 v4.4.0 持平（运行间受 CPU 频率 / 调度抖动影响有 ±15% 波动，本机单跑协程切换在 7.5M–9.1M 间、定时器在 1.9M–2.2M 间，均属噪声，无真实回归）。
+> v4.6.0 相较 v4.5.0 **仅加固安全性、清理死代码、未改动调度内核**，故 5 个场景压测数据与 v4.5.0 持平（运行间受 CPU 频率 / 调度抖动影响有 ±15% 波动，本机单跑协程切换在 7.5M–9.1M 间、定时器在 1.9M–2.2M 间，均属噪声，无真实回归）。
 
 > 相对倍数以 `kode/fibers = 1.00x` 为基准；`—` 表示语义不等价或无对应原语。`revolt`/`reactphp` 的「回调」行仅作参考上限，不参与协程级排名。
 
@@ -111,7 +111,7 @@
 
 ---
 
-## 3. 结论（v4.5.0）
+## 3. 结论（v4.6.0）
 
 | 场景 | kode/fibers | 协程级最佳对照 | 结论 |
 | --- | --- | --- | --- |
@@ -193,6 +193,22 @@
 | 定位澄清 | 新增「纯 PHP `Fiber` 官方协程方案」说明：本库为 Swoole / Swow 之外的另一条官方协程路线，互补而非竞争，给用户更多选择 | 文档与 README 同步更新 |
 
 > **关于「继续提高压测数字」**：逐层微基准（`benchmarks/prof_switch.php`）显示——裸 Fiber 物理下限约 15.4M ops/s（L0）；加上就绪队列降到 11.4M（L1）；加上 `WeakMap` 归属查找降到 9.8M（L2）；真实 `Scheduler` 已通过 v4.2.1 的「yieldNow 去 WeakMap 查找」等措施把切换做到 9.09M（L5），非常接近 L1→L2 的纯开销极限。进一步跳过 `Fiber::getCurrent()`（L4 vs L4a）**毫无收益**（7.33M ≈ 7.37M），并入真实 `Scheduler` 后反而回归（曾实测 8.30M 并已回退）。结论：**纯 PHP `Fiber` 切换已到实际天花板（约 9M，≈59% 的裸 Fiber 下限）**；要继续逼近原生 swoole/swow 的 14–20M，须将切换下沉到 C 层栈切换（原生后端桥接），属架构级改动——本版本按用户既定方向**不对接 Swoole / Swow**，保持纯 PHP 实现，把它作为「官方另一条协程路线」提供给用户。
+
+### v4.5.0 → v4.6.0：安全性加固 + 死代码清理（内核未改，性能持平）
+
+本版本把重心从「压测数字」转向「安全性与健壮性」（用户要求：安全性、开发便捷性、无用/错误代码清理）。调度内核（`Scheduler` / `Coroutine` / `Channel` / `Timer` / `Runtime`）**零改动**，5 个场景压测与 v4.5.0 持平。
+
+| 变更 | 做法 | 收益 / 影响 |
+| --- | --- | --- |
+| 路径穿越防护 | `FileTransactionStorage` 事务 ID 白名单 + `basename` 兜底 | 杜绝 `../` 任意文件读写 |
+| SQL 注入 / 跨驱动修复 | `DatabaseTransactionStorage` 表名白名单；建表 / UPSERT 按 MySQL / SQLite / PG 分支 | 此前单一方言在其它数据库必崩，现已可移植 |
+| 命令注入防护 | `Php85Features::pipeExecute()` 改数组形式直传 `proc_open`（不经 shell） | 从根上消除注入面，并移除重复的「原生管道」分支 |
+| 信息泄露防护 | RPC / WebSocket 服务端统一返回 `Internal error`；修复 `RpcServer` 重复 `fclose` | 不再外泄内部异常；避免双重关闭 |
+| 握手 / 跨站防护 | `WebSocketServer` 校验 `Upgrade/Connection/Version`，新增 `setAllowedOrigins()`（CSWSH），请求头加行数 / 长度上限 | 防御跨站 WebSocket 劫持与内存耗尽 |
+| 死代码清理 | 删除 `EnableFibers`（缺依赖加载即崩）、`TaskMutex`、`WebmanServiceProvider`（零引用）、伪 `ProtobufProtocol`；修正 `IntegrationManager` 命名空间映射并移除 `eval` | 包更干净、无加载即崩/误导实现 |
+| Profiler 修复 | `Fibers::profilerDashboard()` 改为直接渲染实测记录（原会重测覆盖 duration/status）；`FiberProfiler` 新增 `loadRecords()` | 仪表盘数值真实 |
+
+> 凡网络监听组件（`RpcServer` / `WebSocketServer` / `WebUI`）默认绑定 `0.0.0.0` 且**不带鉴权**；生产环境务必置于反向代理 / 防火墙之后，并对 WebSocket 配置 `setAllowedOrigins()`。
 
 > 公共 API 不变。因移除了两项运行时依赖（且二者均不进入公共 API），按语义化版本以**次版本号（minor）**发布为 `4.5.0`。
 

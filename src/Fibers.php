@@ -707,26 +707,12 @@ class Fibers
     public static function profilerDashboard(array $records): string
     {
         $profiler = new FiberProfiler();
-        foreach ($records as $record) {
-            if (!is_array($record)) {
-                continue;
-            }
-            $profiler->profile((string) ($record['name'] ?? 'task'), fn() => $record);
-        }
+        // 直接载入调用方传入的实测记录，不再重新测量
+        // （否则 duration_ms/status/error 会被覆盖为 ~0ms/成功，面板失真）
+        $profiler->loadRecords($records);
 
         $webUI = new WebUI(['profiler' => $profiler]);
         return $webUI->renderDashboard();
-    }
-
-    /**
-     * 渲染性能分析仪表盘（profilerDashboard 的语义化别名）
-     *
-     * @param array $records 性能记录
-     * @return string HTML 内容
-     */
-    public static function profilerRenderDashboard(array $records): string
-    {
-        return static::profilerDashboard($records);
     }
 
     public static function eloquent(object $connection): EloquentAdapter

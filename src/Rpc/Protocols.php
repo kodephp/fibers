@@ -62,24 +62,3 @@ class MessagePackProtocol implements RpcProtocolInterface
         return 'msgpack';
     }
 }
-
-/**
- * Protocol Buffers RPC 协议（简单实现）
- */
-class ProtobufProtocol implements RpcProtocolInterface
-{
-    public function encode(array $data): string
-    {
-        return json_encode($data);
-    }
-
-    public function decode(string $data): array
-    {
-        return json_decode($data, true) ?? [];
-    }
-
-    public function getName(): string
-    {
-        return 'protobuf';
-    }
-}

@@ -29,7 +29,7 @@ $info = FrameworkDetector::getRuntimeInfo();
 | Yii3 | `isYii3()` | `Yii3ServiceProvider` |
 | ThinkPHP | `isThinkPHP()` | `ThinkPHPService` |
 | Hyperf | `isHyperf()` | `HyperfServiceProvider` |
-| Webman | `isWebman()` | `WebmanBootstrap` |
+| Webman | `isWebman()` | 仅注入 bindings，未提供独立服务提供者（可基于 `IntegrationManager::getBindings()` 自行注册） |
 | Lumen | `isLumen()` | `LumenServiceProvider` |
 
 ## 自动初始化

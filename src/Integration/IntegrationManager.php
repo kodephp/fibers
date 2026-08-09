@@ -143,7 +143,10 @@ class IntegrationManager
     protected static function integrateWithHelper(): void
     {
         if (!function_exists('fibers')) {
-            eval('function fibers() { return \Kode\Fibers\Fibers::class; }');
+            function fibers(): string
+            {
+                return \Kode\Fibers\Fibers::class;
+            }
         }
     }
 
@@ -209,13 +212,12 @@ class IntegrationManager
     public static function createProvider(string $framework): ?string
     {
         $providerMap = [
-            'laravel' => '\Kode\Fibers\Integration\Providers\LaravelServiceProvider',
-            'symfony' => '\Kode\Fibers\Integration\Providers\SymfonyBundle',
-            'yii3' => '\Kode\Fibers\Integration\Providers\Yii3ServiceProvider',
-            'thinkphp' => '\Kode\Fibers\Integration\Providers\ThinkPHPService',
-            'hyperf' => '\Kode\Fibers\Integration\Providers\HyperfServiceProvider',
-            'webman' => '\Kode\Fibers\Integration\Providers\WebmanBootstrap',
-            'lumen' => '\Kode\Fibers\Integration\Providers\LumenServiceProvider',
+            'laravel' => '\Kode\Fibers\Providers\LaravelServiceProvider',
+            'symfony' => '\Kode\Fibers\Providers\SymfonyBundle',
+            'yii3' => '\Kode\Fibers\Providers\Yii3ServiceProvider',
+            'thinkphp' => '\Kode\Fibers\Providers\ThinkPHPService',
+            'hyperf' => '\Kode\Fibers\Providers\HyperfServiceProvider',
+            'lumen' => '\Kode\Fibers\Providers\LumenServiceProvider',
         ];
 
         return $providerMap[strtolower($framework)] ?? null;

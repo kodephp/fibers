@@ -96,7 +96,6 @@ class RpcServer
             $data = fread($client, 65536);
             
             if ($data === false || $data === '') {
-                fclose($client);
                 return;
             }
 
@@ -125,7 +124,7 @@ class RpcServer
                 'jsonrpc' => '2.0',
                 'error' => [
                     'code' => -32603,
-                    'message' => 'Internal error: ' . $e->getMessage(),
+                    'message' => 'Internal error',
                 ],
                 'id' => null,
             ];
@@ -167,7 +166,7 @@ class RpcServer
                 'id' => $id,
             ];
         } catch (\Throwable $e) {
-            return $this->createErrorResponse($id, -32603, $e->getMessage());
+            return $this->createErrorResponse($id, -32603, 'Internal error');
         }
     }
 

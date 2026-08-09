@@ -41,4 +41,15 @@ class FiberProfiler
     {
         return $this->records;
     }
+
+    /**
+     * 载入已测量好的记录（用于从外部记录渲染仪表盘，避免重复测量）
+     *
+     * @param array<int, array{name:string,status:string,duration_ms:float,memory_delta:int,error?:?string}> $records
+     * @return void
+     */
+    public function loadRecords(array $records): void
+    {
+        $this->records = array_values($records);
+    }
 }

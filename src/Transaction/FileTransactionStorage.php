@@ -91,6 +91,12 @@ class FileTransactionStorage implements TransactionStorageInterface
 
     protected function getFilePath(string $id): string
     {
-        return $this->path . '/' . $id . '.json';
+        // 仅允许安全的文件名（字母/数字/短横/下划线/点），杜绝路径穿越（../）。
+        // basename 兜底剥离任何目录成分，确保文件始终落在本存储目录下。
+        if (!preg_match('/^[A-Za-z0-9._-]+$/', $id)) {
+            throw new \InvalidArgumentException(sprintf('非法的事务 ID：%s', $id));
+        }
+
+        return $this->path . '/' . basename($id . '.json');
     }
 }

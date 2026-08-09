@@ -18,11 +18,27 @@ class WebSocketServer
     protected array $services = [];
     protected array $middleware = [];
     protected bool $running = false;
+    protected array $allowedOrigins = [];
 
     public function __construct(string $host = '0.0.0.0', int $port = 8080)
     {
         $this->host = $host;
         $this->port = $port;
+    }
+
+    /**
+     * 限制允许建立 WebSocket 连接的 Origin（跨站劫持防护）。
+     *
+     * 传入空数组表示不校验 Origin（默认行为，便于本地开发）；
+     * 传入非空列表时，握手阶段 Origin 不在白名单内将被拒绝。
+     *
+     * @param string[] $origins 允许的 Origin 列表，如 ['https://app.example.com']
+     * @return self
+     */
+    public function setAllowedOrigins(array $origins): self
+    {
+        $this->allowedOrigins = $origins;
+        return $this;
     }
 
     /**
@@ -89,10 +105,26 @@ class WebSocketServer
     protected function handleConnection($client): void
     {
         $headers = $this->readHeaders($client);
-        
-        if (!isset($headers['Sec-WebSocket-Key'])) {
+
+        if (!isset($headers['Sec-WebSocket-Key'], $headers['Upgrade'], $headers['Connection'], $headers['Sec-WebSocket-Version'])) {
             fclose($client);
             return;
+        }
+
+        // 校验 WebSocket 握手必备字段
+        if (strtolower($headers['Upgrade']) !== 'websocket'
+            || !preg_match('/\bupgrade\b/i', $headers['Connection'])
+            || $headers['Sec-WebSocket-Version'] !== '13') {
+            fclose($client);
+            return;
+        }
+
+        // 跨站 WebSocket 劫持（CSWSH）防护：配置了白名单时严格校验 Origin
+        if ($this->allowedOrigins !== [] && isset($headers['Origin'])) {
+            if (!in_array($headers['Origin'], $this->allowedOrigins, true)) {
+                fclose($client);
+                return;
+            }
         }
 
         $key = $headers['Sec-WebSocket-Key'];
@@ -118,7 +150,8 @@ class WebSocketServer
     protected function readHeaders($client): array
     {
         $headers = [];
-        while (($line = fgets($client)) !== false) {
+        $maxLines = 64;
+        while ($maxLines-- > 0 && ($line = fgets($client, 8192)) !== false) {
             $line = trim($line);
             if ($line === '') {
                 break;
@@ -194,7 +227,7 @@ class WebSocketServer
                 'id' => $id,
             ];
         } catch (\Throwable $e) {
-            return $this->createErrorResponse($id, -32603, $e->getMessage());
+            return $this->createErrorResponse($id, -32603, 'Internal error');
         }
     }
 

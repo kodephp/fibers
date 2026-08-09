@@ -17,7 +17,7 @@
 - ✅ Profiler 数据采集：`FiberProfiler` 性能分析
 - ✅ 运行时桥接：`RuntimeBridge` 支持 Swoole/OpenSwoole/Swow/Workerman
 - ✅ 热重载支持：`HotReloader` 不中断服务更新代码
-- ✅ 多框架支持：Lumen、Hyperf、Webman 服务提供者
+- ✅ 多框架支持：Laravel、Symfony、Yii3、ThinkPHP8、Lumen、Hyperf 服务提供者
 
 ### 连接池与 ORM
 - ✅ 连接池支持：`ConnectionPool` 支持 PDO、Redis 连接池

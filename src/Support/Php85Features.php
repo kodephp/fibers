@@ -60,96 +60,57 @@ class Php85Features
     }
 
     /**
-     * 使用管道执行命令（PHP 8.5+）
+     * 执行命令并捕获输出（兼容 PHP 8.5 前后的所有版本）
      *
-     * @param string $command 命令
-     * @param string|null $input 输入数据
+     * 以数组形式传入命令与参数（命令为第 0 项，参数为后续项），
+     * 直接交由 proc_open 而**不经过 shell**，从根上杜绝命令注入。
+     *
+     * @param string $command 可执行文件（或命令）路径
+     * @param string[] $args 参数列表（不会经由 shell 解析）
+     * @param string|null $input 通过 stdin 传入的数据
      * @return array [stdout, stderr, exitCode]
      */
-    public static function pipeExecute(string $command, ?string $input = null): array
+    public static function pipeExecute(string $command, array $args = [], ?string $input = null): array
     {
-        if (self::supportsPipe()) {
-            return self::executeWithNativePipe($command, $input);
-        }
-        
-        return self::executeWithProcOpen($command, $input);
+        $spec = array_merge([$command], array_values($args));
+
+        return self::executeCommand($spec, $input);
     }
 
     /**
-     * 使用原生管道执行（PHP 8.5+）
+     * 通过 proc_open 执行（数组命令形式，无 shell）
      *
-     * @param string $command 命令
-     * @param string|null $input 输入数据
-     * @return array
+     * @param string[] $command
+     * @param string|null $input
+     * @return array [stdout, stderr, exitCode]
      */
-    protected static function executeWithNativePipe(string $command, ?string $input = null): array
-    {
-        $stdout = '';
-        $stderr = '';
-        $exitCode = 0;
-        
-        $descriptors = [
-            0 => ['pipe', 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
-        ];
-        
-        $process = proc_open($command, $descriptors, $pipes);
-        
-        if (!is_resource($process)) {
-            return ['', 'Failed to create process', -1];
-        }
-        
-        if ($input !== null) {
-            fwrite($pipes[0], $input);
-        }
-        fclose($pipes[0]);
-        
-        $stdout = stream_get_contents($pipes[1]);
-        $stderr = stream_get_contents($pipes[2]);
-        
-        fclose($pipes[1]);
-        fclose($pipes[2]);
-        
-        $exitCode = proc_close($process);
-        
-        return [$stdout, $stderr, $exitCode];
-    }
-
-    /**
-     * 使用 proc_open 执行（兼容模式）
-     *
-     * @param string $command 命令
-     * @param string|null $input 输入数据
-     * @return array
-     */
-    protected static function executeWithProcOpen(string $command, ?string $input = null): array
+    protected static function executeCommand(array $command, ?string $input = null): array
     {
         $descriptors = [
             0 => ['pipe', 'r'],
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w'],
         ];
-        
+
         $process = proc_open($command, $descriptors, $pipes);
-        
+
         if (!is_resource($process)) {
             return ['', 'Failed to create process', -1];
         }
-        
+
         if ($input !== null) {
             fwrite($pipes[0], $input);
         }
         fclose($pipes[0]);
-        
+
         $stdout = stream_get_contents($pipes[1]);
         $stderr = stream_get_contents($pipes[2]);
-        
+
         fclose($pipes[1]);
         fclose($pipes[2]);
-        
+
         $exitCode = proc_close($process);
-        
+
         return [$stdout, $stderr, $exitCode];
     }
 
