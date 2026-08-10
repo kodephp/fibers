@@ -2,8 +2,6 @@
 
 declare(strict_types=1);
 
-use function Kode\Fibers\Support\env;
-
 return [
     /*
     |--------------------------------------------------------------------------

@@ -143,18 +143,19 @@ class InitCommand extends Command
      */
     private function findProjectRoot(): string
     {
-        $currentDir = __DIR__;
-        
-        // 向上查找包含 composer.json 的目录
+        // 从用户当前工作目录向上查找项目根，确保 `fibers init` 把配置写到
+        // 调用方项目里，而不是顺着类文件目录回溯到本包源码目录。
+        $currentDir = getcwd() ?: __DIR__;
+
         while ($currentDir !== dirname($currentDir)) {
             if (file_exists($currentDir . '/composer.json')) {
                 return $currentDir;
             }
             $currentDir = dirname($currentDir);
         }
-        
-        // 如果找不到，使用包的目录
-        return dirname(__DIR__, 2);
+
+        // 如果找不到，回退到调用方的工作目录
+        return getcwd() ?: dirname(__DIR__, 2);
     }
     
     /**
@@ -171,8 +172,6 @@ class InitCommand extends Command
         
         return <<<PHP
 <?php
-
-use function Kode\Fibers\Support\env;
 
 return [
     /*

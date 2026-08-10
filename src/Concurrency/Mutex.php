@@ -106,6 +106,14 @@ final class Mutex
             return;
         }
 
+        $current = Fiber::getCurrent();
+
+        // 仅允许持锁协程解锁，避免任意协程误解除他人持有的锁。
+        // 持锁者为某个 Fiber（owner !== null）而当前上下文并非该 Fiber（含 null）时拒绝。
+        if ($this->owner !== null && $current !== $this->owner) {
+            throw new FiberException('只有持锁协程可以解锁');
+        }
+
         $this->owner = null;
 
         while ($this->waiters !== []) {

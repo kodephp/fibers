@@ -237,8 +237,12 @@ class CpuInfo
                             $speculativePages = (int)$matches[1][3];
                             $wiredPages = (int)$matches[1][4];
                             
-                            // 每页大小通常是4KB
-                            $pageSize = 4096;
+                            // 每页大小随芯片而异（Apple Silicon 为 16KB），
+                            // 硬编码 4096 会导致 free/used 偏差 4 倍，故动态获取。
+                            $pageSize = (int) (shell_exec('getconf PAGESIZE') ?: 4096);
+                            if ($pageSize <= 0) {
+                                $pageSize = 4096;
+                            }
                             $memoryInfo['free'] = ($freePages + $inactivePages + $speculativePages) * $pageSize;
                             $memoryInfo['used'] = $memoryInfo['total'] - $memoryInfo['free'];
                         }

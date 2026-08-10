@@ -67,12 +67,12 @@ class RpcClient
         ];
 
         $body = $this->protocol->encode($request);
-        
+
         $url = "http://{$this->host}:{$this->port}{$this->path}";
-        
-        $httpClient = new HttpClient();
+
+        $httpClient = new HttpClient(['timeout' => $this->timeout]);
         $response = $httpClient->post($url, $body, array_merge($this->headers, [
-            'Content-Type' => 'application/json',
+            'Content-Type' => $this->contentType(),
             'X-Rpc-Protocol' => $this->protocol->getName(),
         ]));
 
@@ -86,6 +86,17 @@ class RpcClient
         }
 
         return $result['result'] ?? null;
+    }
+
+    /**
+     * 根据协议返回正确的 Content-Type
+     */
+    protected function contentType(): string
+    {
+        return match ($this->protocol->getName()) {
+            'msgpack' => 'application/msgpack',
+            default => 'application/json',
+        };
     }
 
     /**
@@ -108,9 +119,9 @@ class RpcClient
         $body = $this->protocol->encode($requests);
         $url = "http://{$this->host}:{$this->port}{$this->path}";
 
-        $httpClient = new HttpClient();
+        $httpClient = new HttpClient(['timeout' => $this->timeout]);
         $response = $httpClient->post($url, $body, array_merge($this->headers, [
-            'Content-Type' => 'application/json',
+            'Content-Type' => $this->contentType(),
             'X-Rpc-Protocol' => $this->protocol->getName(),
         ]));
 
@@ -153,31 +164,5 @@ class RpcClient
     public static function msgpack(string $host, int $port = 8080, string $path = '/rpc'): self
     {
         return new self($host, $port, $path, new MessagePackProtocol());
-    }
-}
-
-/**
- * RPC 异常
- */
-class RpcException extends \Exception
-{
-    protected int $errorCode;
-    protected array $errorData = [];
-
-    public function __construct(string $message, int $code = -32603, array $data = [])
-    {
-        parent::__construct($message, $code);
-        $this->errorCode = $code;
-        $this->errorData = $data;
-    }
-
-    public function getErrorCode(): int
-    {
-        return $this->errorCode;
-    }
-
-    public function getErrorData(): array
-    {
-        return $this->errorData;
     }
 }

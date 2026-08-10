@@ -93,16 +93,34 @@ class RpcServer
      */
     protected function handleClient($client): void
     {
+        stream_set_timeout($client, 5);
+
         try {
-            $data = fread($client, 65536);
-            
-            if ($data === false || $data === '') {
+            $http = $this->readHttpRequest($client);
+
+            if ($http === null) {
                 return;
             }
 
-            $request = $this->protocol->decode($data);
+            $request = $this->protocol->decode($http['body']);
 
-            $isBatch = is_array($request) && isset($request[0]);
+            // 协议层约定返回数组；若实现异常返回非数组（如畸形输入被吞成 null），
+            // 统一按「解析错误」响应，避免把非数组传入 handleRequest(array) 触发 TypeError。
+            if (!is_array($request)) {
+                $body = $this->protocol->encode(
+                    $this->createErrorResponse(null, -32700, 'Parse error')
+                );
+                $httpResponse = "HTTP/1.1 400 Bad Request\r\n";
+                $httpResponse .= "Content-Type: application/json\r\n";
+                $httpResponse .= "Content-Length: " . strlen($body) . "\r\n";
+                $httpResponse .= "Connection: close\r\n\r\n";
+                $httpResponse .= $body;
+                fwrite($client, $httpResponse);
+
+                return;
+            }
+
+            $isBatch = isset($request[0]);
 
             if ($isBatch) {
                 if (count($request) > $this->maxBatchSize) {
@@ -145,6 +163,67 @@ class RpcServer
         } finally {
             fclose($client);
         }
+    }
+
+    /**
+     * 从连接读取一个完整的 HTTP 请求，返回头与 body
+     *
+     * 客户端（RpcClient）发送的是标准 HTTP/1.1 POST，不能直接把含请求头的
+     * 原始数据交给协议层解码——那样会把 HTTP 头误当成 JSON 导致解析失败。
+     * 这里按 Content-Length 精确读取请求体，再对 body 做协议解码。
+     *
+     * @return array{headers:array, body:string}|null 读取失败或连接关闭时返回 null
+     */
+    protected function readHttpRequest($client): ?array
+    {
+        $buffer = '';
+
+        // 先读全请求头（以空行结尾）
+        while (!str_contains($buffer, "\r\n\r\n")) {
+            $chunk = @fread($client, 8192);
+            if ($chunk === false || $chunk === '') {
+                break;
+            }
+            $buffer .= $chunk;
+        }
+
+        if ($buffer === '' || !str_contains($buffer, "\r\n\r\n")) {
+            return null;
+        }
+
+        [$headerPart, $body] = explode("\r\n\r\n", $buffer, 2);
+        $headers = $this->parseRawHeaders($headerPart);
+        $length = (int) ($headers['CONTENT-LENGTH'] ?? 0);
+
+        // 按 Content-Length 补足 body（HTTP 请求体可能分片到达）
+        while (strlen($body) < $length) {
+            $chunk = @fread($client, $length - strlen($body));
+            if ($chunk === false || $chunk === '') {
+                break;
+            }
+            $body .= $chunk;
+        }
+
+        return ['headers' => $headers, 'body' => substr($body, 0, $length)];
+    }
+
+    /**
+     * 将原始 HTTP 头文本解析为大写键数组
+     */
+    protected function parseRawHeaders(string $raw): array
+    {
+        $headers = [];
+
+        foreach (explode("\r\n", $raw) as $index => $line) {
+            if ($index === 0) {
+                continue; // 请求行（POST /rpc HTTP/1.1）
+            }
+            if (preg_match('/^([^:]+):\s*(.*)$/', $line, $m)) {
+                $headers[strtoupper(trim($m[1]))] = trim($m[2]);
+            }
+        }
+
+        return $headers;
     }
 
     /**

@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Kode\Fibers\Task;
 
+use Kode\Context\Context;
+use Kode\Fibers\Concurrency\CancelledException;
+use Kode\Fibers\Concurrency\Runtime;
+use Kode\Fibers\Concurrency\TimeoutException;
 use Kode\Fibers\Contracts\Runnable;
 use Kode\Fibers\Exceptions\FiberException;
 
@@ -79,7 +83,7 @@ class RetryableTask implements Runnable
         array $options = []
     ) {
         $this->callable = $callable;
-        $this->maxRetries = $maxRetries;
+        $this->maxRetries = max(0, $maxRetries);
         $this->retryDelay = $retryDelay;
         $this->options = array_merge([
             'id' => uniqid('retry_task_', true),
@@ -100,46 +104,60 @@ class RetryableTask implements Runnable
     {
         $attempt = 0;
         $lastException = null;
-        
+
         while ($attempt <= $this->maxRetries) {
             try {
                 $attempt++;
-                
+
                 if ($attempt > 1) {
                     // Calculate delay based on backoff strategy if provided
-                    $delay = $this->backoffStrategy ? 
-                        ($this->backoffStrategy)($attempt, $this->retryDelay) : 
-                        $this->retryDelay;
-                    
-                    // Wait before retrying
-                    usleep((int)($delay * 1000000));
+                    $delay = $this->backoffStrategy
+                        ? ($this->backoffStrategy)($attempt, $this->retryDelay)
+                        : $this->retryDelay;
+
+                    // 协程内让出执行权，非协程环境退化为 usleep，
+                    // 避免 usleep 冻结整个单线程调度器。
+                    Runtime::sleep((float) $delay);
                 }
-                
-                // Execute the task
-                return call_user_func($this->callable);
+
+                $body = function (): mixed {
+                    $context = $this->options['context'] ?? [];
+                    if ($context !== []) {
+                        Context::merge($context);
+                    }
+
+                    return ($this->callable)();
+                };
+
+                // 通过 Runtime 执行：使 timeout 选项真正生效（超时即抛 TimeoutException）。
+                // 原先直接 call_user_func 完全忽略了 timeout / context。
+                return Runtime::execute($body, $this->options['timeout'] ?? null);
+            } catch (CancelledException | TimeoutException $e) {
+                // 取消 / 超时不应被当作可重试失败，原样向上抛出
+                throw $e;
             } catch (\Throwable $e) {
                 $lastException = $e;
-                
+
                 // Check if this exception is retryable
                 if (!$this->shouldRetry($e)) {
                     throw new FiberException(
                         "Non-retryable exception occurred in task {$this->options['id']}: " . $e->getMessage(),
-                        (int)$e->getCode(),
+                        (int) $e->getCode(),
                         $e
                     );
                 }
-                
+
                 // If max retries reached, throw the last exception
                 if ($attempt > $this->maxRetries) {
                     throw new FiberException(
                         "Task {$this->options['id']} failed after {$this->maxRetries} retries: " . $e->getMessage(),
-                        (int)$e->getCode(),
+                        (int) $e->getCode(),
                         $e
                     );
                 }
             }
         }
-        
+
         // This should never be reached due to the throw in the loop
         throw new FiberException("Task {$this->options['id']} failed after maximum retries", 0, $lastException);
     }

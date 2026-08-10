@@ -23,7 +23,7 @@ try {
     $input = new Input($argv);
     $output = new Output();
     exit($command->fire($input, $output));
-} catch (Exception $e) {
+} catch (\Throwable $e) {
     echo "Error: " . $e->getMessage() . "\n";
     exit(1);
 }

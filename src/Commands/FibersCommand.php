@@ -110,18 +110,32 @@ class FibersCommand
         return $this->useNativeDriver;
     }
 
+    /**
+     * 执行命令
+     *
+     * 已安装 kode/console 时委托内部命令对象处理；否则回退到内建的原生实现。
+     */
+    public function fire(\Kode\Console\Input $in, \Kode\Console\Output $out): int
+    {
+        if ($this->command !== null) {
+            return $this->command->fire($in, $out);
+        }
+
+        return $this->runNative([$in->arg(0, 'help')]);
+    }
+
     public function run(array $argv = []): int
     {
         if ($this->useNativeDriver) {
             return $this->runNative($argv);
         }
-        
+
         return 0;
     }
 
     protected function runNative(array $argv): int
     {
-        $command = $argv[1] ?? 'help';
+        $command = $argv[0] ?? 'help';
         
         echo "Kode/Fibers CLI Tool\n";
         echo "===================\n\n";

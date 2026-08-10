@@ -98,6 +98,9 @@ class TaskRunner
 
             try {
                 return static::run($task, $timeout);
+            } catch (CancelledException | TimeoutException $e) {
+                // 取消 / 超时不应被当作可重试失败，原样向上抛出
+                throw $e;
             } catch (\Throwable $e) {
                 $lastException = $e;
                 $attempt++;

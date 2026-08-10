@@ -50,7 +50,7 @@ class IOuringSupport
 
     public static function isExtensionLoaded(): bool
     {
-        return extension_loaded('io_uring') || extension_loaded('uopz');
+        return extension_loaded('io_uring');
     }
 
     public static function isAvailable(): bool

@@ -226,6 +226,21 @@
 
 > 公共 API 收敛：`Event` / `Attributes` 命名空间不再存在；`Fibers` / `Facades\Fiber` 的其余 `@method` 与 `Fibers::roadmap()` / `profilerDashboard()` 保持不变。按语义化版本以**次版本号（minor）**发布为 `4.7.0`。
 
+### v4.7.0 → v4.8.0：WebSocket RPC 端到端往返修复（内核未改，性能持平）
+
+本版本按用户要求继续「检测问题并直接修复 + 增强健壮性」。调度内核（`Scheduler` / `Coroutine` / `Channel` / `Timer` / `Runtime`）**零改动**，5 个场景压测与 v4.7.0 持平（运行间受 CPU 频率 / 调度抖动影响有 ±15% 波动，属噪声）。
+
+| 变更 | 做法 | 收益 / 影响 |
+| --- | --- | --- |
+| WebSocket 服务端双读帧（P0） | `WebSocketServer::handleMessages()` 原在一个循环里调用**两次** `readFrame()`——第一帧（客户端业务请求）被读入后丢弃，第二帧才处理；客户端每次只发一帧，于是服务端丢弃请求后阻塞等待「第二帧」、永不回包，客户端恒报 `No response received`。→ 删除冗余读取，单次 `readFrame()` 即处理 | WebSocket RPC 端到端往返恢复（`echo.ping` / `math.add` 经实测通过） |
+| 客户端 ping/pong 健壮性 | `WebSocketClient::receiveFrame()` 增加服务端主动 ping（0x09）处理：回 pong 后继续读取真正业务帧，避免把控制帧误当响应 | 服务端可主动保活探测而不破坏在途调用 |
+| 客户端关闭帧 | `sendFrame()` 抽出 `readPayload()` 并支持 `$opcode` 参数；`close()` 现发送标准 `0x88` close 帧（此前发送空文本帧，服务端不会真正断开） | 连接优雅关闭，服务端 `readFrame` 正确识别并断开 |
+| 服务端连接超时 | 为接受的客户端连接设置 `stream_set_timeout($client, 1)` | 避免死连接永久阻塞单连接同步服务端 |
+
+> 新增回归测试 `tests/Rpc/WebSocketRpcTest.php`（单次调用 / 同连接连续调用 / 结果类型校验）覆盖双读帧缺陷，防止复发。
+
+按语义化版本以**次版本号（minor）**发布为 `4.8.0`。
+
 ---
 
 ## 5. 复现

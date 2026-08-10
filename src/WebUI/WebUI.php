@@ -17,19 +17,25 @@ class WebUI
     protected ?FiberPool $pool = null;
     protected ?FiberProfiler $profiler = null;
     protected int $port = 8080;
-    protected string $host = '0.0.0.0';
+    protected string $host = '127.0.0.1';
     protected bool $running = false;
     protected string $title = 'Kode/Fibers Dashboard';
     protected string $theme = 'light';
 
+    /**
+     * 进程启动时刻，用于计算 uptime（避免被单次请求的 REQUEST_TIME 重置为 0）
+     */
+    protected int $startedAt;
+
     public function __construct(array $options = [])
     {
         $this->port = (int) ($options['port'] ?? 8080);
-        $this->host = (string) ($options['host'] ?? '0.0.0.0');
+        $this->host = (string) ($options['host'] ?? '127.0.0.1');
         $this->pool = $options['pool'] ?? null;
         $this->profiler = $options['profiler'] ?? null;
         $this->title = (string) ($options['title'] ?? 'Kode/Fibers Dashboard');
         $this->theme = (string) ($options['theme'] ?? 'light');
+        $this->startedAt = time();
     }
 
     public function setPool(FiberPool $pool): self
@@ -87,22 +93,24 @@ class WebUI
         $method = $parts[0] ?? 'GET';
         $uri = $parts[1] ?? '/';
 
+        $headers = [];
         while (($line = fgets($conn, 8192)) !== false) {
             if (trim($line) === '') {
                 break;
             }
             if (preg_match('/^([^:]+):\s*(.*)$/', $line, $m)) {
-                $_SERVER['HTTP_' . strtoupper(str_replace('-', '_', trim($m[1])))] = trim($m[2]);
+                $headers[strtolower(trim($m[1]))] = trim($m[2]);
             }
         }
 
-        $_SERVER['REQUEST_METHOD'] = $method;
-        $_SERVER['REQUEST_URI'] = $uri;
-        $_SERVER['REQUEST_TIME'] = time();
-        $_SERVER['HTTP_ACCEPT'] ??= 'application/json';
+        $request = [
+            'method' => $method,
+            'uri' => $uri,
+            'accept' => $headers['accept'] ?? 'application/json',
+        ];
 
-        [$status, $headers, $body] = $this->buildResponse();
-        $this->writeResponse($conn, $status, $headers, $body);
+        [$status, $headersOut, $body] = $this->buildResponse($request);
+        $this->writeResponse($conn, $status, $headersOut, $body);
     }
 
     /**
@@ -114,6 +122,7 @@ class WebUI
             200 => 'OK',
             404 => 'Not Found',
             500 => 'Internal Server Error',
+            503 => 'Service Unavailable',
             default => 'OK',
         };
 
@@ -130,12 +139,21 @@ class WebUI
     /**
      * 根据当前请求计算响应（[status, headers, body]），供 CGI（php -S 路由脚本）
      * 与自托管服务器（start()）共用。
+     *
+     * @param array|null $request 自托管模式下由 serveConnection 解析的请求；
+     *                            null 时回退到 $_SERVER（CGI / php -S 模式）。
      */
-    protected function buildResponse(): array
+    protected function buildResponse(?array $request = null): array
     {
-        $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
-        $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-        $accept = $_SERVER['HTTP_ACCEPT'] ?? 'application/json';
+        if ($request === null) {
+            $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+            $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+            $accept = $_SERVER['HTTP_ACCEPT'] ?? 'application/json';
+        } else {
+            $path = parse_url($request['uri'] ?? '/', PHP_URL_PATH);
+            $method = $request['method'] ?? 'GET';
+            $accept = $request['accept'] ?? 'application/json';
+        }
 
         $isHtmlRequest = str_contains($accept, 'text/html');
 
@@ -143,10 +161,20 @@ class WebUI
             return [200, ['Content-Type' => 'text/html; charset=utf-8'], $this->renderDashboard()];
         }
 
+        $payload = $this->route($path, $method);
+
+        // 路由层返回的错误码（404 / 503 等）应如实反映到 HTTP 状态码，
+        // 而非一律返回 200。失败响应同样需保证为合法 JSON。
+        $status = (int) ($payload['code'] ?? 200);
+        $body = json_encode(
+            $payload,
+            JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE
+        );
+
         return [
-            200,
+            $status,
             ['Content-Type' => 'application/json; charset=utf-8'],
-            json_encode($this->route($path, $method), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
+            $body === false ? '{}' : $body,
         ];
     }
 
@@ -264,7 +292,7 @@ class WebUI
             'memory_usage' => memory_get_usage(true),
             'memory_peak' => memory_get_peak_usage(true),
             'memory_limit' => ini_get('memory_limit'),
-            'uptime' => time() - ($_SERVER['REQUEST_TIME'] ?? time()),
+            'uptime' => max(0, time() - $this->startedAt),
         ];
         
         if ($this->pool) {
@@ -280,12 +308,23 @@ class WebUI
 
     protected function getDashboardData(): array
     {
+        // 仪表盘模板按 active_fibers / total_tasks / completed_tasks / failed_tasks
+        // 渲染，而 FiberPool::getStats() 的真实键为 success/failed/...，这里做对齐，
+        // 否则四个指标恒为 0。
+        $poolStats = $this->pool?->getStats() ?? [];
+        $poolView = $this->pool ? [
+            'active_fibers' => $this->pool->getActiveCount(),
+            'total_tasks' => $this->pool->getTotalExecuted(),
+            'completed_tasks' => $poolStats['success'] ?? 0,
+            'failed_tasks' => $poolStats['failed'] ?? 0,
+        ] : null;
+
         return [
             'title' => $this->title,
             'theme' => $this->theme,
             'health' => $this->healthCheck(),
             'metrics' => $this->getMetrics(),
-            'pool' => $this->pool ? $this->pool->getStats() : null,
+            'pool' => $poolView,
             'profiler' => $this->profiler ? $this->getProfilerStats() : null,
             'records' => $this->profiler ? array_slice($this->profiler->records(), -50) : [],
         ];

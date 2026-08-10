@@ -73,10 +73,22 @@ class GrpcProtocol
 
     /**
      * 解码消息体
+     *
+     * {@see self::encodeMessage()} 在 JSON 前写入了 varint 长度前缀，
+     * 这里必须先剥离该前缀再解析 JSON，否则会读到前缀字节导致解码失败、
+     * 数据被 `?? []` 静默丢弃。
      */
     protected function decodeMessage(string $data): array
     {
-        return json_decode($data, true) ?? [];
+        if ($data === '') {
+            return [];
+        }
+
+        $length = $this->decodeVarint($data);
+        $json = substr($data, 0, $length);
+        $decoded = json_decode($json, true);
+
+        return is_array($decoded) ? $decoded : [];
     }
 
     /**

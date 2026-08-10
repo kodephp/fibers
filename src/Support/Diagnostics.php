@@ -780,8 +780,12 @@ class Diagnostics
     private static function convertToBytes(string $val): int
     {
         $val = trim($val);
+        if ($val === '') {
+            return 0;
+        }
+
         $last = strtolower($val[strlen($val) - 1]);
-        
+
         $val = (int)$val;
         
         switch ($last) {

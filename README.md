@@ -20,7 +20,7 @@
 - 📝 **原生 PHP 8.3 Attributes + PHPDoc 实现 IDE 完整识别**
 - 🚫 **禁用函数检测 + 运行环境诊断**
 
-## 📊 性能基准（v4.7.0）
+## 📊 性能基准（v4.8.0）
 
 `kode/fibers` 在 v4.6.0 中**加固了安全性并清理了死代码**：删除了加载即崩溃的 `EnableFibers` 中间件、零引用的 `TaskMutex` 与 `WebmanServiceProvider`、以及伪装实现的 `ProtobufProtocol`；修复了文件事务存储的路径穿越、WebSocket 握手缺失校验与跨站劫持面、RPC/WebSocket 内部错误信息外泄、数据库存储的跨驱动 DDL/UPSERT 与命令注入等隐患。**调度内核未改动，性能与 v4.5.0 持平**（协程切换 ~9.1M、Channel ~24M、定时器 ~2.2M，均为 PHP 用户态最快 / 全场第一）。本库是**纯 PHP、零 C 扩展**的协程调度器，基于 PHP 官方 `Fiber` 原语实现，是 Swoole / Swow 之外的**官方另一条协程路线**——若你的场景追求极限原生吞吐且可接受扩展依赖，可直接选用 Swoole / Swow；若你更看重零扩展、框架原生、可静态分析与跨平台一致，本库即为此而生。在 **PHP 8.3** + OPcache JIT 下与同类库（含原生协程引擎 Swoole / Swow）做真实横向压测，**Channel 与定时器双双登顶全场最快，反超原生 Swoole / Swow**：
 

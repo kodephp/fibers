@@ -240,9 +240,9 @@ class TaskQueue
         $this->paused = false;
         
         if ($wait) {
-            // Wait for all running tasks to complete
+            // Wait for all running tasks to complete（协程内让出执行权）
             while (!empty($this->runningTasks)) {
-                usleep(100);
+                Runtime::sleep(0.001);
             }
         }
         
@@ -351,16 +351,22 @@ class TaskQueue
     public function waitEmpty(?float $timeout = null): bool
     {
         $startTime = microtime(true);
-        
+
         while (!$this->queue->isEmpty() || !empty($this->runningTasks)) {
+            // 队列未启动时无法自行消费任务：直接返回 false，避免 null 超时的永久忙等
+            if (!$this->running) {
+                return false;
+            }
+
             // Check for timeout
             if ($timeout !== null && microtime(true) - $startTime > $timeout) {
                 return false;
             }
-            
-            usleep(100);
+
+            // 协程内让出执行权，非协程环境退化为短休眠
+            Runtime::sleep(0.001);
         }
-        
+
         return true;
     }
 
