@@ -154,8 +154,10 @@ final class Coroutine
     public function execute(Fiber $fiber): void
     {
         $this->fiber = $fiber;
-        $this->state = CoroutineState::Running;
 
+        // 不在这里写 Running 状态：Running 与 Pending 在 isFinished() 上等价，
+        // 而 execute() 处于「每次任务」的极热路径，省掉这次枚举赋值。
+        // 协程的真正终态（Completed/Failed/Cancelled）仍由下方精确设置。
         try {
             $this->result = ($this->task)();
             $this->state = CoroutineState::Completed;

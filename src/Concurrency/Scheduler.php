@@ -876,10 +876,15 @@ final class Scheduler
                 return;
             }
 
-            if ($head >= 1024 && $head >= $this->readyTail - $head) {
+            if (($head >= 4096 && $this->readyTail - $head >= 4096) || $head >= 65536) {
                 // 自我唤醒的协程会让游标单调增长，底层数组随之无限扩张。
                 // 已消费部分超过存量时压缩一次，摊还成本 O(1)，也让热循环
                 // 始终工作在一小块连续内存上，缓存命中率明显更好。
+                //
+                // 压缩触发条件刻意要求「已消费」与「待处理」两边都达到一定规模
+                // （或游标绝对过大）：单协程反复 yield 的紧凑循环里待处理恒为 1，
+                // 若只要「已消费 ≥ 待处理」就压缩，会退化为「每次 yield 都
+                // array_values 重新分配数组」——这比保留少量空洞更慢也更费内存。
                 $this->ready = array_values($this->ready);
                 $this->readyTail -= $head;
                 $this->readyHead = 0;

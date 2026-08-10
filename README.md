@@ -20,19 +20,19 @@
 - 📝 **原生 PHP 8.3 Attributes + PHPDoc 实现 IDE 完整识别**
 - 🚫 **禁用函数检测 + 运行环境诊断**
 
-## 📊 性能基准（v4.8.0）
+## 📊 性能基准（v4.9.0）
 
 `kode/fibers` 在 v4.6.0 中**加固了安全性并清理了死代码**：删除了加载即崩溃的 `EnableFibers` 中间件、零引用的 `TaskMutex` 与 `WebmanServiceProvider`、以及伪装实现的 `ProtobufProtocol`；修复了文件事务存储的路径穿越、WebSocket 握手缺失校验与跨站劫持面、RPC/WebSocket 内部错误信息外泄、数据库存储的跨驱动 DDL/UPSERT 与命令注入等隐患。**调度内核未改动，性能与 v4.5.0 持平**（协程切换 ~9.1M、Channel ~24M、定时器 ~2.2M，均为 PHP 用户态最快 / 全场第一）。本库是**纯 PHP、零 C 扩展**的协程调度器，基于 PHP 官方 `Fiber` 原语实现，是 Swoole / Swow 之外的**官方另一条协程路线**——若你的场景追求极限原生吞吐且可接受扩展依赖，可直接选用 Swoole / Swow；若你更看重零扩展、框架原生、可静态分析与跨平台一致，本库即为此而生。在 **PHP 8.3** + OPcache JIT 下与同类库（含原生协程引擎 Swoole / Swow）做真实横向压测，**Channel 与定时器双双登顶全场最快，反超原生 Swoole / Swow**：
 
 | 场景 | kode/fibers (ops/s) | 协程级最佳对照 | 相对倍数 | 内存增量 |
 | --- | ---: | ---: | ---: | ---: |
-| 协程创建与完成（2 万） | **1,934,026** | swoole 2,182,642 / amphp 142,847 | 紧随 swoole，领先 amphp **13.5x** | 19.2 KB |
-| 协程切换（5 万次让出） | **9,094,355** | swow 19.9M / swoole 14.2M（原生） | PHP 用户态最快，领先 amphp/revolt **5.2x** | 19.5 KB |
-| 定时器调度（2 万） | **2,233,348** | swoole 1,080,760 | **全场第一**，领先 swoole **2.07x** | 0 B |
-| Channel 吞吐（5 万消息） | **23,143,241** | swow 6,919,817 / swoole 4,617,160 | **全场第一**，领先 swoole **5.0x** | 38.2 KB |
-| 并发聚合（1 万任务） | **1,400,634** | swoole 2,038,442 / amphp 173,964 | 领先 amphp **8.0x** | 19.5 KB |
+| 协程创建与完成（2 万） | **2,099,747** | swoole 2,417,077 / amphp 151,836 | 紧随 swoole，领先 amphp **13.8x** | 18.9 KB |
+| 协程切换（5 万次让出） | **6,027,425** | swow（C 层，历史 19.9M）/ swoole 15.4M（原生） | PHP 用户态最快，领先 amphp/revolt **3.8x** | 19.3 KB |
+| 定时器调度（2 万） | **1,690,462** | swoole 1,296,772 | **全场第一**，领先 swoole **1.30x** | 0 B |
+| Channel 吞吐（5 万消息） | **10,924,186** | swow 6.9M / swoole 5,338,007 | **全场第一**，领先 swoole **2.05x** | 37.8 KB |
+| 并发聚合（1 万任务） | **1,257,565** | swoole 2,470,432 / amphp 193,887 | 领先 amphp **6.5x** | 19.3 KB |
 
-> 数值为预热 2 轮 + 实测 5 轮取中位数（PHP 8.3.31，OPcache JIT `tracing` 开启，`hrtime` 计时）。`reactphp`/`revolt` 的「回调」维度为纯事件循环（无协程语义），仅作参考上限，不与协程级实现直接等价对比。原生 Swoole / Swow 为 C 层栈式协程，在 Zend VM 钩子上与本进程互斥，以独立子进程方式测量。完整方法论、环境与逐场景曲线见 [docs/benchmark.md](docs/benchmark.md)。
+> 数值为连续 3 轮取中位数（PHP 8.3.33，OPcache JIT `tracing` 开启，`hrtime` 计时）。**本机 run-to-run 波动约 ±20–30%**，单次跑可能落在区间内很大范围；历史文档中更高的切换 / Channel 数值属低负载单跑的噪声带上沿。`reactphp`/`revolt` 的「回调」维度为纯事件循环（无协程语义），仅作参考上限，不与协程级实现直接等价对比。原生 Swoole / Swow 为 C 层栈式协程，在 Zend VM 钩子上与本进程互斥，以独立子进程方式测量。完整方法论、环境与逐场景曲线见 [docs/benchmark.md](docs/benchmark.md)。
 
 ## 📖 项目背景
 
