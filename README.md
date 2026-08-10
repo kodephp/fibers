@@ -10,7 +10,7 @@
 - ⚠️ **PHP <8.4 析构函数中禁止切换 Fiber 的自动降级处理**
 - 🧩 **一键启用协程模式（非侵入式）**
 - 🔁 **高性能 Fiber 池 + 自动回收机制**
-- 💬 **Fiber 间通信：Channel、Queue、Event Bus**
+- 💬 **Fiber 间通信：Channel、Queue**
 - 🛰️ **集成常见操作支持：MySQL、PgSQL、Redis、HTTP Client、文件 IO**
 - ⏱️ **超时控制、异常捕获、资源监控**
 - 🔄 **任务重试机制**
@@ -20,7 +20,7 @@
 - 📝 **原生 PHP 8.3 Attributes + PHPDoc 实现 IDE 完整识别**
 - 🚫 **禁用函数检测 + 运行环境诊断**
 
-## 📊 性能基准（v4.6.0）
+## 📊 性能基准（v4.7.0）
 
 `kode/fibers` 在 v4.6.0 中**加固了安全性并清理了死代码**：删除了加载即崩溃的 `EnableFibers` 中间件、零引用的 `TaskMutex` 与 `WebmanServiceProvider`、以及伪装实现的 `ProtobufProtocol`；修复了文件事务存储的路径穿越、WebSocket 握手缺失校验与跨站劫持面、RPC/WebSocket 内部错误信息外泄、数据库存储的跨驱动 DDL/UPSERT 与命令注入等隐患。**调度内核未改动，性能与 v4.5.0 持平**（协程切换 ~9.1M、Channel ~24M、定时器 ~2.2M，均为 PHP 用户态最快 / 全场第一）。本库是**纯 PHP、零 C 扩展**的协程调度器，基于 PHP 官方 `Fiber` 原语实现，是 Swoole / Swow 之外的**官方另一条协程路线**——若你的场景追求极限原生吞吐且可接受扩展依赖，可直接选用 Swoole / Swow；若你更看重零扩展、框架原生、可静态分析与跨平台一致，本库即为此而生。在 **PHP 8.3** + OPcache JIT 下与同类库（含原生协程引擎 Swoole / Swow）做真实横向压测，**Channel 与定时器双双登顶全场最快，反超原生 Swoole / Swow**：
 
@@ -442,66 +442,24 @@ $pool = new FiberPool($config['default_pool']);
 $results = $pool->concurrent([...]);
 ```
 
-### ✅ 4. PHP 8.3 原生注解 + IDE 可识别设计
+### ✅ 4. 纯 PHP Fiber API + IDE 可识别设计
 
-Kode/fibers充分利用PHP 8.3的原生注解功能，提供更好的IDE支持和类型安全：
+Kode/fibers 提供完整的 IDE 支持与类型安全，无需任何运行期魔法：
 
-#### 使用 Attribute 实现元数据标记
-
-```php
-use Kode\Fibers\Attributes\FiberSafe;
-use Kode\Fibers\Attributes\Timeout;
-use Kode\Fibers\Attributes\ChannelListener;
-
-#[FiberSafe] // 表示该方法可在纤程中安全调用
-class ApiService 
-{
-    #[Timeout(10)] // 设置10秒超时
-    public function fetchUser(int $id): array
-    {
-        return json_decode(file_get_contents("https://api.com/users/$id"), true);
-    }
-
-    #[ChannelListener('order.created')] // 监听通道事件
-    public function onOrderCreated(array $data): void
-    {
-        // 处理订单创建事件
-    }
-}
-```
-
-#### PHPDoc 辅助 IDE 提示
+Kode/fibers 基于 PHP 原生 `Fiber` 原语，不依赖运行期注解（Attribute）内省，调用方式即文档：
 
 ```php
-/**
- * @method static mixed run(callable $task, float $timeout = null)
- * @method static FiberPool pool(array $options = [])
- * @method static Channel channel(string $name, int $buffer = 0)
- * @method static array concurrent(array $tasks, float $timeout = null)
- */
-class Fiber {}
+// 通过 Facade（静态）或助手函数即可获得完整 IDE 补全
+use Kode\Fibers\Fibers;
+
+$result = Fibers::run(fn() => processUserData($user));
 ```
 
-✅ 在 PhpStorm / VSCode + Intelephense 中均可获得完整补全！
+✅ 在 PhpStorm / VSCode + Intelephense 中均可获得完整补全（基于 `Fibers` / `Facades\Fiber` 的 `@method` 声明）。
 
-#### 自动类型推断与验证
+### ✅ 5. 通信机制：Channel
 
-Kode/fibers通过PHP 8.3的类型系统和注解，可以在开发阶段捕获潜在问题：
-
-```php
-#[FiberSafe]
-function processUserData(User $user): array {
-    // 函数逻辑...
-    return ['id' => $user->id, 'name' => $user->name];
-}
-
-// IDE会自动提示类型错误
-Fiber::run(fn() => processUserData(null)); // 提示：参数1应为User类型
-```
-
-### ✅ 5. 通信机制：Channel 与 Event Bus
-
-Kode/fibers提供了强大的纤程间通信机制，包括Channel（类似Go Channel）和Event Bus（发布/订阅模式）：
+Kode/fibers 提供强大的纤程间通信机制，核心原语是 Channel（类似 Go Channel）：
 
 #### 创建通信通道（类似 Go Channel）
 
@@ -541,42 +499,7 @@ if ($ch->tryPush('data', 0.5)) { // 0.5秒超时
 
 #### 发布/订阅模型（Event Bus）
 
-```php
-use Kode\Fibers\Event\EventBus;
-use Kode\Fibers\Event\Event;
-
-// 定义事件类
-class PaymentSuccessEvent extends Event {
-    public function __construct(public array $paymentData) {
-        parent::__construct('payment.success', $paymentData);
-    }
-}
-
-// 注册事件监听器
-EventBus::on('payment.success', function (Event $event) {
-    $paymentData = $event->getData();
-    // 处理支付成功事件
-    notifyAdmin($paymentData);
-});
-
-// 注册一次性监听器（只触发一次）
-EventBus::once('user.login', fn($event) => logFirstLogin($event->getData()));
-
-// 触发事件
-EventBus::fire(new PaymentSuccessEvent([
-    'order_id' => 123,
-    'amount' => 99.99,
-    'user_id' => 456
-]));
-
-// 移除事件监听器
-EventBus::off('payment.success');
-
-// 带有优先级的事件监听器
-EventBus::on('system.shutdown', fn() => saveCriticalData(), 100); // 高优先级
-EventBus::on('system.shutdown', fn() => cleanTempFiles(), 50); // 中优先级
-EventBus::on('system.shutdown', fn() => logShutdown(), 10); // 低优先级
-```
+> 注：本库当前以 **Channel** 作为纤程间通信的核心原语；早期版本提供的 `Kode\Fibers\Event\EventBus` 发布/订阅组件已移除（未被内核引用）。如需事件总线，可基于 `Channel` 自行封装，或接入外部消息中间件。
 
 ### ✅ 6. 禁用函数检测与环境诊断
 

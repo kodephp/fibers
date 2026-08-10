@@ -44,12 +44,12 @@ namespace Kode\Fibers\Facades;
 class Fiber extends Facade
 {
     /**
-     * 获取组件的注册名称
+     * 获取组件的注册名称（对应 Facade 基类 classMap 中的 'fibers' 键）
      *
      * @return string
      */
-    protected static function id(): string
+    protected static function getFacadeAccessor(): string
     {
-        return 'fiber';
+        return 'fibers';
     }
 }

@@ -46,8 +46,24 @@ class WebUI
 
     public function start(): void
     {
+        $server = @stream_socket_server("tcp://{$this->host}:{$this->port}", $errno, $errstr);
+        if ($server === false) {
+            throw new \RuntimeException("WebUI 无法监听 {$this->host}:{$this->port}（{$errstr} #{$errno}）");
+        }
+
         $this->running = true;
-        $this->handleRequest();
+        fwrite(STDOUT, "WebUI 已启动: {$this->getAddress()}\n");
+
+        while ($this->running) {
+            $conn = @stream_socket_accept($server, 1.0);
+            if ($conn === false) {
+                continue;
+            }
+            $this->serveConnection($conn);
+            fclose($conn);
+        }
+
+        fclose($server);
     }
 
     public function stop(): void
@@ -55,23 +71,97 @@ class WebUI
         $this->running = false;
     }
 
-    protected function handleRequest(): void
+    /**
+     * 在已建立的连接上读取一次 HTTP 请求并返回响应（自托管服务器使用）。
+     */
+    protected function serveConnection($conn): void
+    {
+        stream_set_timeout($conn, 5);
+
+        $requestLine = fgets($conn, 8192);
+        if ($requestLine === false) {
+            return;
+        }
+
+        $parts = explode(' ', trim($requestLine));
+        $method = $parts[0] ?? 'GET';
+        $uri = $parts[1] ?? '/';
+
+        while (($line = fgets($conn, 8192)) !== false) {
+            if (trim($line) === '') {
+                break;
+            }
+            if (preg_match('/^([^:]+):\s*(.*)$/', $line, $m)) {
+                $_SERVER['HTTP_' . strtoupper(str_replace('-', '_', trim($m[1])))] = trim($m[2]);
+            }
+        }
+
+        $_SERVER['REQUEST_METHOD'] = $method;
+        $_SERVER['REQUEST_URI'] = $uri;
+        $_SERVER['REQUEST_TIME'] = time();
+        $_SERVER['HTTP_ACCEPT'] ??= 'application/json';
+
+        [$status, $headers, $body] = $this->buildResponse();
+        $this->writeResponse($conn, $status, $headers, $body);
+    }
+
+    /**
+     * 将响应写回原始 socket 连接。
+     */
+    protected function writeResponse($conn, int $status, array $headers, string $body): void
+    {
+        $reason = match ($status) {
+            200 => 'OK',
+            404 => 'Not Found',
+            500 => 'Internal Server Error',
+            default => 'OK',
+        };
+
+        $out = "HTTP/1.1 {$status} {$reason}\r\n";
+        $out .= 'Content-Length: ' . strlen($body) . "\r\n";
+        foreach ($headers as $name => $value) {
+            $out .= "{$name}: {$value}\r\n";
+        }
+        $out .= "\r\n" . $body;
+
+        fwrite($conn, $out);
+    }
+
+    /**
+     * 根据当前请求计算响应（[status, headers, body]），供 CGI（php -S 路由脚本）
+     * 与自托管服务器（start()）共用。
+     */
+    protected function buildResponse(): array
     {
         $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
         $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
         $accept = $_SERVER['HTTP_ACCEPT'] ?? 'application/json';
-        
+
         $isHtmlRequest = str_contains($accept, 'text/html');
-        
+
         if ($isHtmlRequest && $path === '/') {
-            header('Content-Type: text/html; charset=utf-8');
-            echo $this->renderDashboard();
-            return;
+            return [200, ['Content-Type' => 'text/html; charset=utf-8'], $this->renderDashboard()];
         }
-        
-        header('Content-Type: application/json; charset=utf-8');
-        $response = $this->route($path, $method);
-        echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+
+        return [
+            200,
+            ['Content-Type' => 'application/json; charset=utf-8'],
+            json_encode($this->route($path, $method), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
+        ];
+    }
+
+    /**
+     * CGI / php -S 路由脚本入口：发送头并输出响应体。
+     */
+    public function handleRequest(): void
+    {
+        [$status, $headers, $body] = $this->buildResponse();
+
+        http_response_code($status);
+        foreach ($headers as $name => $value) {
+            header("{$name}: {$value}");
+        }
+        echo $body;
     }
 
     protected function route(string $path, string $method): array
@@ -90,9 +180,13 @@ class WebUI
 
     protected function index(): array
     {
+        $version = class_exists(\Composer\InstalledVersions::class)
+            ? (\Composer\InstalledVersions::getPrettyVersion('kode/fibers') ?? 'unknown')
+            : 'unknown';
+
         return [
             'name' => 'Kode/Fibers Web UI',
-            'version' => '2.7.0',
+            'version' => $version,
             'endpoints' => [
                 'GET /' => '可视化仪表盘页面',
                 'GET /api/status' => '获取纤程池状态',
@@ -318,7 +412,7 @@ class WebUI
         return $html;
     }
 
-    protected function formatBytes(int $bytes): string
+    protected function formatBytes(int|float $bytes): string
     {
         $units = ['B', 'KB', 'MB', 'GB'];
         $i = 0;

@@ -1,6 +1,6 @@
 # 性能基准与优化说明
 
-本文档记录 `kode/fibers` **v4.6.0** 与同类 PHP 并发库的**真实横向压测对比**、测试方法论，以及本轮（v4.5.0 → v4.6.0）所做的**安全性加固与死代码清理**（路径穿越防护、SQL/命令注入防护、RPC/WebSocket 信息泄露与握手校验、跨驱动 DDL/UPSERT 修复；移除 `EnableFibers` / `TaskMutex` / `WebmanServiceProvider` / 伪 `ProtobufProtocol` 等死代码）。**调度内核未改动，性能与 v4.5.0 持平**（Channel、定时器仍全场第一，协程切换仍为 PHP 用户态最快）。
+本文档记录 `kode/fibers` **v4.7.0** 与同类 PHP 并发库的**真实横向压测对比**、测试方法论，以及本轮（v4.6.0 → v4.7.0）所做的**缺陷修复与误导代码清理**（修复 `Facades\Fiber` 门面断链、修复 `WebUI` 仪表盘 `TypeError` 崩溃并实现真正的自托管 HTTP 服务、修正过期 `Roadmap`、修正 `TaskQueue::waitEmpty` PHP 8.4 隐式可空弃用、RPC 批量请求加上限防 DoS；移除零引用的 `Event/` 与从不读取的 `Attributes/` 惰性注解及全部 `#[FiberSafe]`/`#[Timeout]` 注解）。**调度内核未改动，性能与 v4.6.0 持平**。
 
 所有数据均在 **PHP 8.3.31**（CLI，NTS）下测得，运行环境为 macOS / Apple Silicon（Darwin）。`kode/fibers` 最低支持 **PHP 8.3+**，本基准即以此版本为基线。
 
@@ -210,7 +210,21 @@
 
 > 凡网络监听组件（`RpcServer` / `WebSocketServer` / `WebUI`）默认绑定 `0.0.0.0` 且**不带鉴权**；生产环境务必置于反向代理 / 防火墙之后，并对 WebSocket 配置 `setAllowedOrigins()`。
 
-> 公共 API 不变。因移除了两项运行时依赖（且二者均不进入公共 API），按语义化版本以**次版本号（minor）**发布为 `4.5.0`。
+### v4.6.0 → v4.7.0：缺陷修复 + 误导代码清理（内核未改，性能持平）
+
+本版本按用户要求「检测当前版本问题并直接修复」。调度内核（`Scheduler` / `Coroutine` / `Channel` / `Timer` / `Runtime`）**零改动**，5 个场景压测与 v4.6.0 持平。
+
+| 变更 | 做法 | 收益 / 影响 |
+| --- | --- | --- |
+| 门面断链修复 | `Facades\Fiber` 的 `id()` 改为 `getFacadeAccessor()` 并返回 `'fibers'`，对接基类 `classMap` | 此前 `Fiber::cpuCount()` 等静态调用一律抛 `RuntimeException`，现正常路由到 `Kode\Fibers\Fibers` |
+| 仪表盘崩溃修复 | `WebUI::formatBytes()` 参数 `int` 改为 `int\|float`（记录经 JSON 往返后为 float） | 修复 `Fibers::profilerDashboard()` 的 `TypeError` 崩溃 |
+| WebUI 半成品修复 | `start()` 改为基于 `stream_socket_server` 的真正自托管 HTTP 服务（抽出 `buildResponse` / `writeResponse`，CGI 与自托管共用）；`index()` 版本号改为读取真实包版本 | `start()` 现在真正监听端口并提供 HTML 仪表盘与 JSON API |
+| Roadmap 误导修正 | `Roadmap::items()` 重写为反映已交付能力的真实状态（不再显示 `2.2.x–2.6.x planned`） | `Fibers::roadmap()` 不再对外输出误导性的「规划中」信息 |
+| PHP 8.4 弃用修复 | `TaskQueue::waitEmpty()` 参数 `float` 改为 `?float` | 消除隐式可空弃用告警 |
+| RPC DoS 防护 | `RpcServer` 批量请求加上限（`maxBatchSize = 100`，超限返回 413） | 防御超大批量请求耗尽资源 |
+| 死代码清理 | 删除零引用的 `Event/`（EventBus/Event/BaseEvent）；删除从不读取的 `Attributes/`（FiberSafe/Timeout/ChannelListener/Attribute）及全部 `#[FiberSafe]`/`#[Timeout]` 注解；同步 README | 消除不生效的「假 API」（文档曾称 `#[Timeout(10)]` 会超时保护，实际从不读取） |
+
+> 公共 API 收敛：`Event` / `Attributes` 命名空间不再存在；`Fibers` / `Facades\Fiber` 的其余 `@method` 与 `Fibers::roadmap()` / `profilerDashboard()` 保持不变。按语义化版本以**次版本号（minor）**发布为 `4.7.0`。
 
 ---
 

@@ -19,6 +19,7 @@ class RpcServer
     protected array $services = [];
     protected array $middleware = [];
     protected bool $running = false;
+    protected int $maxBatchSize = 100;
 
     public function __construct(
         string $host = '0.0.0.0',
@@ -102,8 +103,20 @@ class RpcServer
             $request = $this->protocol->decode($data);
 
             $isBatch = is_array($request) && isset($request[0]);
-            
+
             if ($isBatch) {
+                if (count($request) > $this->maxBatchSize) {
+                    $body = $this->protocol->encode(
+                        $this->createErrorResponse(null, -32600, "批量请求过大（上限 {$this->maxBatchSize}）")
+                    );
+                    $httpResponse = "HTTP/1.1 413 Payload Too Large\r\n";
+                    $httpResponse .= "Content-Type: application/json\r\n";
+                    $httpResponse .= "Content-Length: " . strlen($body) . "\r\n";
+                    $httpResponse .= "Connection: close\r\n\r\n";
+                    $httpResponse .= $body;
+                    fwrite($client, $httpResponse);
+                    return;
+                }
                 $response = $this->handleBatch($request);
             } else {
                 $response = $this->handleRequest($request);

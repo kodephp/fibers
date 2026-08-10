@@ -6,7 +6,6 @@ namespace Kode\Fibers\Task;
 
 use Kode\Fibers\Contracts\Runnable;
 use Kode\Fibers\Exceptions\FiberException;
-use Kode\Fibers\Attributes\FiberSafe;
 
 /**
  * Retryable task implementation
@@ -14,7 +13,6 @@ use Kode\Fibers\Attributes\FiberSafe;
  * A specialized task that automatically retries execution on failure
  * according to configurable retry policies.
  */
-#[FiberSafe]
 class RetryableTask implements Runnable
 {
     /**

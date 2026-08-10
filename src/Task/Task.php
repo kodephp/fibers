@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Kode\Fibers\Task;
 
 use Kode\Context\Context;
-use Kode\Fibers\Attributes\FiberSafe;
 use Kode\Fibers\Concurrency\CancelledException;
 use Kode\Fibers\Concurrency\Runtime;
 use Kode\Fibers\Contracts\Runnable;
@@ -17,7 +16,6 @@ use Kode\Fibers\Exceptions\FiberException;
  * Represents a unit of work that can be executed within a fiber, 
  * supporting context, timeout, and priority.
  */
-#[FiberSafe]
 class Task implements Runnable
 {
     /**

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Kode\Fibers\HttpClient;
 
 use GuzzleHttp\Psr7\Request as Psr7Request;
-use Kode\Fibers\Attributes\FiberSafe;
 use Psr\Http\Message\RequestInterface;
 
 /**
@@ -111,7 +110,6 @@ class Request
      * @param string $value The header value
      * @return $this
      */
-    #[FiberSafe]
     public function header(string $name, string $value): static
     {
         $this->request = $this->request->withHeader($name, $value);
@@ -124,7 +122,6 @@ class Request
      * @param array $headers The headers to add
      * @return $this
      */
-    #[FiberSafe]
     public function headers(array $headers): static
     {
         foreach ($headers as $name => $value) {
@@ -139,7 +136,6 @@ class Request
      * @param mixed $data The data to set
      * @return $this
      */
-    #[FiberSafe]
     public function data(mixed $data): static
     {
         $body = is_array($data)
@@ -155,7 +151,6 @@ class Request
      * @param float $timeout The timeout in seconds
      * @return $this
      */
-    #[FiberSafe]
     public function timeout(float $timeout): static
     {
         return $this;
@@ -164,7 +159,6 @@ class Request
     /**
      * 兼容旧 API，不在请求对象内存储传输选项
      */
-    #[FiberSafe]
     public function setOption(string $name, mixed $value): static
     {
         return $this;
@@ -177,7 +171,6 @@ class Request
      * @param mixed $value The option value
      * @return $this
      */
-    #[FiberSafe]
     public function option(string $name, mixed $value): static
     {
         return $this->setOption($name, $value);
@@ -189,7 +182,6 @@ class Request
      * @param array $options The options to set
      * @return $this
      */
-    #[FiberSafe]
     public function options(array $options): static
     {
         foreach ($options as $name => $value) {
@@ -204,7 +196,6 @@ class Request
      * @param string $body The request body
      * @return $this
      */
-    #[FiberSafe]
     public function body(string $body): static
     {
         $this->request = $this->request->withBody(\GuzzleHttp\Psr7\Utils::streamFor($body));
@@ -217,7 +208,6 @@ class Request
      * @param string $contentType The content type
      * @return $this
      */
-    #[FiberSafe]
     public function contentType(string $contentType): static
     {
         return $this->header('Content-Type', $contentType);
@@ -228,7 +218,6 @@ class Request
      *
      * @return string
      */
-    #[FiberSafe]
     public function method(): string
     {
         return strtoupper($this->request->getMethod());
@@ -239,7 +228,6 @@ class Request
      *
      * @return string
      */
-    #[FiberSafe]
     public function url(): string
     {
         return (string) $this->request->getUri();
@@ -250,7 +238,6 @@ class Request
      *
      * @return mixed
      */
-    #[FiberSafe]
     public function getData(): mixed
     {
         return (string) $this->request->getBody();
@@ -261,7 +248,6 @@ class Request
      *
      * @return array
      */
-    #[FiberSafe]
     public function getHeaders(): array
     {
         return $this->request->getHeaders();
@@ -274,7 +260,6 @@ class Request
      * @param mixed $default Default value if header not found
      * @return mixed
      */
-    #[FiberSafe]
     public function getHeader(string $name, mixed $default = null): mixed
     {
         $headers = $this->getHeaders();

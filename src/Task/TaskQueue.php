@@ -8,7 +8,6 @@ use Kode\Fibers\Contracts\Runnable;
 use Kode\Fibers\Concurrency\Runtime;
 use Kode\Fibers\Exceptions\FiberException;
 use Kode\Fibers\Core\FiberPool;
-use Kode\Fibers\Attributes\FiberSafe;
 use SplPriorityQueue;
 
 /**
@@ -17,7 +16,6 @@ use SplPriorityQueue;
  * Manages a queue of tasks with support for prioritization, 
  * concurrency control, and task lifecycle management.
  */
-#[FiberSafe]
 class TaskQueue
 {
     /**
@@ -350,7 +348,7 @@ class TaskQueue
      * @param float $timeout Maximum time to wait in seconds
      * @return bool True if queue became empty, false if timed out
      */
-    public function waitEmpty(float $timeout = null): bool
+    public function waitEmpty(?float $timeout = null): bool
     {
         $startTime = microtime(true);
         

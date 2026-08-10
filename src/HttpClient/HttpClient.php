@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Kode\Fibers\HttpClient;
 
-use Kode\Fibers\Attributes\FiberSafe;
-use Kode\Fibers\Attributes\Timeout;
 use Kode\Fibers\Fibers;
 use Kode\Fibers\Exceptions\FiberException;
 use Psr\Http\Message\ResponseInterface;
@@ -68,50 +66,41 @@ class HttpClient
         ];
     }
 
-    #[FiberSafe]
     public function get(string $url, array $headers = [], array $options = []): Response
     {
         return $this->send('GET', $url, [], $headers, $options);
     }
 
-    #[FiberSafe]
     public function post(string $url, mixed $data = [], array $headers = [], array $options = []): Response
     {
         return $this->send('POST', $url, $data, $headers, $options);
     }
 
-    #[FiberSafe]
     public function put(string $url, mixed $data = [], array $headers = [], array $options = []): Response
     {
         return $this->send('PUT', $url, $data, $headers, $options);
     }
 
-    #[FiberSafe]
     public function delete(string $url, array $headers = [], array $options = []): Response
     {
         return $this->send('DELETE', $url, [], $headers, $options);
     }
 
-    #[FiberSafe]
     public function patch(string $url, mixed $data = [], array $headers = [], array $options = []): Response
     {
         return $this->send('PATCH', $url, $data, $headers, $options);
     }
 
-    #[FiberSafe]
     public function head(string $url, array $headers = [], array $options = []): Response
     {
         return $this->send('HEAD', $url, [], $headers, $options);
     }
 
-    #[FiberSafe]
     public function options(string $url, array $headers = [], array $options = []): Response
     {
         return $this->send('OPTIONS', $url, [], $headers, $options);
     }
 
-    #[FiberSafe]
-    #[Timeout(30)]
     public function send(string $method, string $url, mixed $data = [], array $headers = [], array $options = []): Response
     {
         if ($this->useNativeDriver) {
@@ -235,7 +224,6 @@ class HttpClient
         return 'application/x-www-form-urlencoded';
     }
 
-    #[FiberSafe]
     public function concurrent(array $requests, int $concurrency = 5, float $timeout = 30, bool $failOnError = true): array
     {
         $concurrency = max(1, min($concurrency, count($requests)));
