@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-require __DIR__ . '/vendor/autoload.php';
+require dirname(__DIR__) . '/vendor/autoload.php';
 
 use Kode\Fibers\Rpc\RpcClient;
 use Kode\Fibers\Rpc\RpcServer;
@@ -14,7 +14,8 @@ use Kode\Fibers\Integration\FrameworkDetector;
 use Kode\Fibers\Integration\IntegrationManager;
 use Kode\Fibers\Async\AsyncIO;
 
-echo "=== Kode/Fibers 3.1 示例 ===\n\n";
+$packageVersion = json_decode(file_get_contents(dirname(__DIR__) . '/composer.json'), true)['version'] ?? 'dev';
+echo "=== Kode/Fibers v{$packageVersion} 示例 ===\n\n";
 
 echo "1. 框架检测\n";
 echo "------------\n";

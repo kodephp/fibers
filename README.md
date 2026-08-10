@@ -1,4 +1,4 @@
-# 🚀 Kode/fibers – 高性能 Fiber 线程池与协程调度器
+# 🚀 Kode/fibers – 高性能 Fiber 协程池与协程调度器
 
 > 面向 PHP 8.3+ 的高性能 Fiber 纤程客户端，兼容主流框架并提供可降级、可诊断、可扩展的并发执行能力。
 
@@ -14,7 +14,7 @@
 - 🛰️ **集成常见操作支持：MySQL、PgSQL、Redis、HTTP Client、文件 IO**
 - ⏱️ **超时控制、异常捕获、资源监控**
 - 🔄 **任务重试机制**
-- 🖥️ **CPU 核心感知 + 动态线程池配置**
+- 🖥️ **CPU 核心感知 + 动态协程池配置**
 - 🔌 **多框架适配：Laravel / Symfony / Yii3 / ThinkPHP8 / Plain PHP**
 - 🛠️ **命令行工具生成配置 & 注册服务**
 - 📝 **原生 PHP 8.3 Attributes + PHPDoc 实现 IDE 完整识别**

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Kode\Fibers\Examples;
 
-require __DIR__ . '/vendor/autoload.php';
+require dirname(__DIR__) . '/vendor/autoload.php';
 
 use Kode\Fibers\Transaction\DistributedTransactionManager;
 use Kode\Fibers\Transaction\PersistentTransactionManager;

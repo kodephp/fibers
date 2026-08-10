@@ -8,7 +8,7 @@ declare(strict_types=1);
  * 本文件展示所有主要功能的使用方法
  */
 
-require __DIR__ . '/vendor/autoload.php';
+require dirname(__DIR__) . '/vendor/autoload.php';
 
 use Kode\Fibers\Fibers;
 use Kode\Fibers\Core\FiberPool;
@@ -27,7 +27,8 @@ use Kode\Fibers\Async\AsyncIO;
 use Kode\Fibers\Support\CpuInfo;
 use Kode\Fibers\Support\IOuringSupport;
 
-echo "=== Kode/Fibers v3.3 综合示例 ===\n\n";
+$packageVersion = json_decode(file_get_contents(dirname(__DIR__) . '/composer.json'), true)['version'] ?? 'dev';
+echo "=== Kode/Fibers v{$packageVersion} 综合示例 ===\n\n";
 
 // 1. 框架检测
 echo "1. 框架检测\n";
@@ -43,7 +44,7 @@ echo "PHP 版本: {$info['php_version']}\n\n";
 echo "2. 系统信息\n";
 echo "------------\n";
 echo "CPU 核心数: " . CpuInfo::get() . "\n";
-echo "推荐线程池大小: " . CpuInfo::getRecommendedPoolSize() . "\n\n";
+echo "推荐协程池大小: " . CpuInfo::getRecommendedPoolSize() . "\n\n";
 
 // 3. IO_uring 支持
 echo "3. IO_uring 支持\n";
