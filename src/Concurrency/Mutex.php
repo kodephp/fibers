@@ -26,9 +26,9 @@ final class Mutex
     private bool $locked = false;
 
     /**
-     * 持锁协程对应的 Fiber，用于识别重入
+     * 持锁者身份句柄（协程，取不到时退回纤程），用于识别重入与合法解锁者
      */
-    private ?Fiber $owner = null;
+    private ?object $owner = null;
 
     /**
      * @var Suspension[]
@@ -47,7 +47,7 @@ final class Mutex
      */
     public function lock(?float $timeout = null): void
     {
-        $current = Fiber::getCurrent();
+        $current = $this->holder();
 
         if ($this->locked && $current !== null && $this->owner === $current) {
             throw new FiberException('Mutex 不支持重入，同一协程不能重复加锁');
@@ -92,7 +92,7 @@ final class Mutex
         }
 
         $this->locked = true;
-        $this->owner = Fiber::getCurrent();
+        $this->owner = $this->holder();
 
         return true;
     }
@@ -106,10 +106,10 @@ final class Mutex
             return;
         }
 
-        $current = Fiber::getCurrent();
+        $current = $this->holder();
 
         // 仅允许持锁协程解锁，避免任意协程误解除他人持有的锁。
-        // 持锁者为某个 Fiber（owner !== null）而当前上下文并非该 Fiber（含 null）时拒绝。
+        // 持锁者已知（owner !== null）而当前上下文并非该协程（含 null）时拒绝。
         if ($this->owner !== null && $current !== $this->owner) {
             throw new FiberException('只有持锁协程可以解锁');
         }
@@ -165,6 +165,18 @@ final class Mutex
                 return;
             }
         }
+    }
+
+    /**
+     * 当前上下文的持有者身份句柄
+     *
+     * 刻意不用 Fiber::getCurrent()：纤程是池化复用的，A 协程跑完后它的 Fiber 会被借给
+     * B 协程，以 Fiber 认人就把 B 当成了 A——表现为 B 无辜吃到「不支持重入」，
+     * 还能解开一把自己从没拿过的锁。协程句柄一个任务一个，不受复用影响。
+     */
+    private function holder(): ?object
+    {
+        return Scheduler::current()?->currentCoroutine() ?? Fiber::getCurrent();
     }
 
     private function resolveScheduler(): Scheduler

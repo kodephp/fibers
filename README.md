@@ -62,6 +62,52 @@ v4.6.0 起，库在「性能」之外把**安全性**与**健壮性**列为同�
 
 > 凡涉及网络监听的组件（`RpcServer` / `WebSocketServer` / `WebUI`）默认绑定 `0.0.0.0` 且不带鉴权。生产环境请置于反向代理 / 防火墙之后，并对 WebSocket 配置 `setAllowedOrigins()`。
 
+## 🏃 常驻进程下的并发原语（v4.11.0）
+
+HTTP worker / queue consumer 这类「一个进程服务很多次请求」的形态下，协程原语的语义与一次性脚本不同。本版本修正了四处：
+
+**1. 取消信号在挂起窗口内不再丢失**
+
+`Coroutine::cancel()` 是把异常投进当前挂起点（`Suspension`）的。若信号正好落在「上一次挂起已被定时器唤醒、下一次 `park()` 尚未登记」的窄窗口里，目标的 `Suspension` 已 `pending=false`，`throw()` 直接空转——任务一路跑完还"正常返回"。实测（1ms 步进睡眠 / 4ms 超时）约 1/4 概率命中。现在 `Scheduler::park()` 在登记挂起点后立即补投一次未决取消：挂起点本就是取消承诺的投递时刻，这是唯一不漏的位置。
+
+**2. 循环外创建的超时令牌按单调时钟惰性判定**
+
+`CancellationTokenSource::withTimeout()`（对外即 `Fibers::timeoutToken()`）过去无条件走 `Scheduler::current() ?? Scheduler::default()`。在事件循环外调用时拿到的是进程级默认调度器单例，而**没人驱动它的 `run()`**：定时器永不触发，超时形同不存在，闭包还会把令牌源永久钉在单例上（常驻进程里的无界泄漏）。现在循环外改为登记截止点（`Scheduler::now()` 单调时钟），由下一次 `isCancelled()` / `reason()` / `throwIfCancelled()` / `subscribe()` 观察动作落实取消；循环内仍走定时器，中断精确到点。
+
+显式传入 `$scheduler` 时依旧走定时器——那等于调用方承诺"我自己驱动这个循环"。
+
+**3. `Mutex` 按协程认持锁者**
+
+纤程（`Fiber`）是**池化复用**的：A 协程跑完后它的 Fiber 会被借给 B 协程。以 Fiber 认人，B 会误判为"A 正在重入加锁"而放行，还能解开一把自己从没拿过的锁（互斥语义直接失效）。现在持锁身份取 `Scheduler::currentCoroutine()`，一个任务一个句柄；同一协程重复 `lock()` 仍报「不支持重入」，非持锁协程 `unlock()` 仍报「只有持锁协程可以解锁」。
+
+**4. 没人读取的协程异常会被上报**
+
+`go()` / `async()` 出去的任务抛了错、结果却从没被 `join()`：以前只登记进内部列表（`unhandledErrors()` 全仓无人调用），异常在进程里蒸发——表现为静默的数据不一致，日志里一个字都没有。现在事件循环收尾时会把「上一轮就已失败、过了整整一个循环仍无人读取」的异常交给 `setErrorHandler()`，未设置则直写 stderr。
+
+一轮宽限是必要的：`Runtime::execute()` 的形状是 `go()` → `run()` → `join()`，`join()` 就在 `run()` 返回之后，立即定性会误报。
+
+```php
+$scheduler->setErrorHandler(static function (Throwable $e): void {
+    // 接到自己的日志通道（Monolog / Sentry）
+});
+
+// 常驻 worker：一次请求收尾就要把异常说干净，不等下一个循环边界
+$scheduler->flushUnhandledErrors();
+```
+
+调度器销毁时（含脚本正常退出）会自动 flush 一次，所以下面这种一次性写法也不会漏：
+
+```php
+$scheduler = new Scheduler();
+$scheduler->go(static fn() => throw new RuntimeException('没人 join'));
+$scheduler->run();   // 本轮宽限
+// $scheduler 出作用域 → 析构里上报
+```
+
+> **已知边界**：`Fibers::async()` 在循环外落到进程级默认调度器单例，而它同样没人驱动——那些任务不会自己跑完，却活到下一次有人 `run()` 那个单例，在常驻 worker 里表现为跨请求重放旧任务。本版本**没有**改这个语义（改了会让现有依赖 `async()` 惰性驱动的写法全部失效）。需要隔离时用 `Scheduler::resetDefault()` 丢弃单例，或 `Scheduler::default()->clear()` 清空待执行队列；生产代码请优先在循环内用 `go()`，或干脆 `new Scheduler()` 自带生命周期。
+
+***
+
 ## ⚙️ PHP 8.5 兼容与便捷 API
 
 新增便捷入口以降低接入成本并兼容未来 PHP 8.5 运行时能力：

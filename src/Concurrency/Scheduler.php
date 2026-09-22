@@ -150,11 +150,19 @@ final class Scheduler
     private int $workersReused = 0;
 
     /**
-     * 已失败但结果尚未被消费的协程
+     * 已失败但结果尚未被消费的协程（连同登记时的轮次）
      *
-     * @var Coroutine[]
+     * @var array<int, array{epoch: int, coroutine: Coroutine}>
      */
     private array $failures = [];
+
+    /**
+     * 事件循环轮次计数，每进入一次 run() 加一
+     *
+     * 失败协程按登记时的轮次打标，用于区分「本轮刚失败、外面马上就有 join」和
+     * 「上一轮就失败、过了整整一个循环仍无人问津」——只有后者才是真被丢掉的异常。
+     */
+    private int $epoch = 0;
 
     /**
      * 定时器 / defer 回调抛出异常时的处理器，为 null 时向外抛出
@@ -165,6 +173,17 @@ final class Scheduler
     {
         $this->timers = new TimerQueue();
         $this->owned = new WeakMap();
+    }
+
+    /**
+     * 销毁前把还压在登记表里的异常说出去
+     *
+     * 轮次宽限意味着「最后一次 run() 里失败的协程」永远等不到下一个循环边界。
+     * 一次性脚本与每请求新建调度器的形态正是在这里收尾（进程退出前的析构）。
+     */
+    public function __destruct()
+    {
+        $this->flushUnhandledErrors();
     }
 
     /**
@@ -352,6 +371,14 @@ final class Scheduler
         $suspension = new Suspension($this, $fiber);
         $coroutine->setSuspension($suspension);
 
+        // 取消信号可能正好落在「上一次挂起已被定时器唤醒、这一次 park 尚未登记」的窗口里：
+        // 那一刻 cancel() 打到的 Suspension 已经 pending=false，throw() 直接空转，信号就此丢失。
+        // 对外表现为 withTimeout 的任务一路跑完还"正常返回"（实测 1ms 步进 / 4ms 超时下约 1/4 概率）。
+        // 挂起点正是取消承诺的投递时刻，所以在这里补投一次。
+        if ($coroutine->isCancelRequested()) {
+            $coroutine->throwIfCancelled();
+        }
+
         return $suspension;
     }
 
@@ -495,6 +522,7 @@ final class Scheduler
         $previous = self::$current;
         self::$current = $this;
         $this->running = true;
+        ++$this->epoch;
 
         try {
             while (true) {
@@ -528,6 +556,82 @@ final class Scheduler
         } finally {
             $this->running = false;
             self::$current = $previous;
+
+            // 本轮收尾：把「没人读取过结果的失败协程」交出去（见 reportUnhandledErrors）
+            $this->reportUnhandledErrors();
+        }
+    }
+
+    /**
+     * 上报已失败但结果从未被读取的协程异常
+     *
+     * 这些异常此前只登记进 $failures（仅用于 unhandledErrors() 查询，而全仓无人调用），
+     * 于是「协程抛了错」这件事在进程里蒸发了——常驻 worker 里表现为静默的数据不一致，
+     * 排查时日志/错误流里一个字都没有。
+     *
+     * 本轮刚登记的失败不在这里上报：Runtime::execute() 的形状是 go() → run() → join()，
+     * join() 发生在 run() 返回之后，那一刻异常还活着（见 $epoch 的轮次宽限）。
+     */
+    private function reportUnhandledErrors(): void
+    {
+        $epoch = $this->epoch;
+        $left = [];
+        $errors = [];
+
+        foreach ($this->failures as $failure) {
+            if ($failure['coroutine']->isHandled()) {
+                continue;
+            }
+
+            if ($failure['epoch'] >= $epoch) {
+                $left[] = $failure;
+
+                continue;
+            }
+
+            $errors[] = $failure['coroutine']->error() ?? new FiberException('unknown');
+        }
+
+        $this->failures = $left;
+        $this->emit($errors);
+    }
+
+    /**
+     * 立即上报所有仍未被读取的失败并清空登记的异常部分
+     *
+     * run() 结束只处理「上一轮」的失败（见轮次宽限）。常驻 worker 想在一次请求收尾就把
+     * 话说完，或脚本退出前不想把异常带进下一阶段，调这个。
+     */
+    public function flushUnhandledErrors(): void
+    {
+        $errors = $this->unhandledErrors();
+        $this->failures = [];
+        $this->emit($errors);
+    }
+
+    /**
+     * @param Throwable[] $errors
+     */
+    private function emit(array $errors): void
+    {
+        foreach ($errors as $error) {
+            try {
+                if ($this->errorHandler !== null) {
+                    ($this->errorHandler)($error);
+
+                    continue;
+                }
+
+                // 直写 stderr：常驻 worker 的错误流本来就进服务日志，而 error_log() 的去向
+                // 取决于部署方的 ini（CLI 默认落 stdout，会被测试框架当成"意外输出"）
+                fwrite(STDERR, sprintf(
+                    '未被读取的协程异常（结果从未被 join）：%s: %s',
+                    $error::class,
+                    $error->getMessage()
+                ) . PHP_EOL);
+            } catch (Throwable) {
+                // 上报通道自身失败不能拖垮事件循环
+            }
         }
     }
 
@@ -579,15 +683,21 @@ final class Scheduler
      */
     public function unhandledErrors(): array
     {
-        $this->failures = array_values(array_filter(
-            $this->failures,
-            static fn(Coroutine $coroutine): bool => !$coroutine->isHandled()
-        ));
+        $left = [];
+        $errors = [];
 
-        return array_map(
-            static fn(Coroutine $coroutine): Throwable => $coroutine->error() ?? new FiberException('unknown'),
-            $this->failures
-        );
+        foreach ($this->failures as $failure) {
+            if ($failure['coroutine']->isHandled()) {
+                continue;
+            }
+
+            $left[] = $failure;
+            $errors[] = $failure['coroutine']->error() ?? new FiberException('unknown');
+        }
+
+        $this->failures = $left;
+
+        return $errors;
     }
 
     /**
@@ -609,7 +719,7 @@ final class Scheduler
             return;
         }
 
-        $this->failures[] = $coroutine;
+        $this->failures[] = ['epoch' => $this->epoch, 'coroutine' => $coroutine];
 
         // 只保留最近的失败记录，避免长驻进程内存无限增长
         if (count($this->failures) > 128) {

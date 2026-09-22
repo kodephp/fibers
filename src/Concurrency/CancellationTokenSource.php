@@ -30,11 +30,26 @@ final class CancellationTokenSource
 
     /**
      * 创建一个在指定秒数后自动取消的令牌源
+     *
+     * 在事件循环内用定时器精确中断；循环外（常驻 worker 的请求路径上很常见）
+     * 则退化为单调时钟截止点——默认调度器的 run() 没人驱动，注册定时器等于永不超时，
+     * 那个闭包还会把本对象永久钉在进程级单例上。
      */
     public static function withTimeout(float $seconds, ?Scheduler $scheduler = null): self
     {
         $source = new self();
-        $scheduler ??= Scheduler::current() ?? Scheduler::default();
+        $running = Scheduler::current();
+
+        if ($scheduler === null && $running === null) {
+            $source->token->armDeadline(
+                Scheduler::now() + $seconds,
+                new TimeoutException(sprintf('操作超时（%.3fs）', $seconds))
+            );
+
+            return $source;
+        }
+
+        $scheduler ??= $running;
 
         $source->timer = $scheduler->delay($seconds, static function () use ($source, $seconds): void {
             $source->cancel(new TimeoutException(sprintf('操作超时（%.3fs）', $seconds)));

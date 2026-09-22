@@ -38,6 +38,13 @@ final class CancellationToken
     private int $callbackSequence = 0;
 
     /**
+     * 墙上时钟截止点（单调秒），到点后由下一次观察动作落实取消
+     */
+    private ?float $deadlineAt = null;
+
+    private ?Throwable $deadlineReason = null;
+
+    /**
      * @internal 请通过 CancellationTokenSource 创建
      */
     public function __construct()
@@ -54,7 +61,44 @@ final class CancellationToken
 
     public function isCancelled(): bool
     {
+        $this->settleDeadline();
+
         return $this->cancelled;
+    }
+
+    /**
+     * 登记一个墙上时钟截止点
+     *
+     * 用于「创建令牌时不在事件循环里」的场景：那种情况下注册定时器等于永不触发
+     * （没人驱动 run()），而闭包又会把令牌源钉在进程级默认调度器上——常驻 worker 里
+     * 就是无界泄漏。改为按单调时钟惰性判定：到点后由下一次观察动作落实。
+     *
+     * @internal 仅供 CancellationTokenSource 使用
+     */
+    public function armDeadline(float $deadlineAt, Throwable $reason): void
+    {
+        if ($this->cancelled) {
+            return;
+        }
+
+        $this->deadlineAt = $deadlineAt;
+        $this->deadlineReason = $reason;
+    }
+
+    /**
+     * 把已到期的墙上时钟截止落实为取消（并触发订阅回调）
+     */
+    private function settleDeadline(): void
+    {
+        if ($this->cancelled || $this->deadlineAt === null || Scheduler::now() < $this->deadlineAt) {
+            return;
+        }
+
+        $reason = $this->deadlineReason ?? new CancelledException('操作已被取消');
+        $this->deadlineAt = null;
+        $this->deadlineReason = null;
+
+        $this->cancel($reason);
     }
 
     /**
@@ -62,6 +106,8 @@ final class CancellationToken
      */
     public function reason(): ?Throwable
     {
+        $this->settleDeadline();
+
         return $this->reason;
     }
 
@@ -72,6 +118,8 @@ final class CancellationToken
      */
     public function throwIfCancelled(): void
     {
+        $this->settleDeadline();
+
         if (!$this->cancelled) {
             return;
         }
@@ -97,6 +145,8 @@ final class CancellationToken
     public function subscribe(callable $callback): int
     {
         $closure = $callback instanceof Closure ? $callback : Closure::fromCallable($callback);
+
+        $this->settleDeadline();
 
         if ($this->cancelled) {
             $closure($this->reason);
@@ -129,6 +179,8 @@ final class CancellationToken
             return;
         }
 
+        $this->deadlineAt = null;
+        $this->deadlineReason = null;
         $this->cancelled = true;
         $this->reason = $reason;
 
