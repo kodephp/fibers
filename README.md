@@ -108,6 +108,22 @@ $scheduler->run();   // 本轮宽限
 
 ***
 
+## 🏷️ 版本自述（v4.12.0）
+
+`Fibers::VERSION` 常量与 `Fibers::version()` 暴露本包版本，用于诊断输出与运行时核对：
+
+```php
+use Kode\Fibers\Fibers;
+
+Fibers::version();          // '4.12.0'
+Fibers::VERSION;            // 同一常量的字面量，可写进 diagnose()/日志字段
+```
+
+`composer.json` 的 `version` 字段是 composer 侧的权威值，类常量是它的交叉核对副本——
+`tests/VersionGuardTest.php` 在两者不一致时直接失败，杜绝「tag 打了、常量忘改」的漂移。
+
+***
+
 ## ⚙️ PHP 8.5 兼容与便捷 API
 
 新增便捷入口以降低接入成本并兼容未来 PHP 8.5 运行时能力：
