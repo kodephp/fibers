@@ -1,12 +1,12 @@
 # 🚀 Kode/fibers – 高性能 Fiber 协程池与协程调度器
 
-> 面向 PHP 8.3+ 的高性能 Fiber 纤程客户端，兼容主流框架并提供可降级、可诊断、可扩展的并发执行能力。
+> 面向 PHP 8.4+ 的高性能 Fiber 纤程客户端，兼容主流框架并提供可降级、可诊断、可扩展的并发执行能力。
 
 ***
 
 ## ✅ 特性概览
 
-- ✅ **PHP 8.3+ 原生 Fiber 支持**（充分利用 typed constants、`#[\Override]`、`json_validate()` 等新特性）
+- ✅ **PHP 8.4+ 原生 Fiber 支持**（充分利用 typed constants、`#[\Override]`、`json_validate()` 等新特性）
 - ⚠️ **PHP <8.4 析构函数中禁止切换 Fiber 的自动降级处理**
 - 🧩 **一键启用协程模式（非侵入式）**
 - 🔁 **高性能 Fiber 池 + 自动回收机制**
