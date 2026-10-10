@@ -835,6 +835,12 @@ if ($client->isUsingNativeDriver()) {
 
 ***
 
+## 📄 许可证
+
+Apache License 2.0 - 参见 [LICENSE](LICENSE) 文件。
+
+***
+
 > Maintained by **Byte Team - Kode PHP Lab**\
 > 🌐 <https://github.com/Kode-php/fibers>
 
