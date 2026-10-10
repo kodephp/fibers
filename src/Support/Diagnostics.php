@@ -14,12 +14,12 @@ class Diagnostics
     /**
      * 最小支持的PHP版本（与 composer.json 的 "php": "^8.3" 保持一致）
      */
-    public const MIN_PHP_VERSION = '8.3.0';
+    public const MIN_PHP_VERSION = '8.4.0';
 
     /**
      * 建议的PHP版本
      */
-    public const RECOMMENDED_PHP_VERSION = '8.3.0';
+    public const RECOMMENDED_PHP_VERSION = '8.4.0';
 
     /**
      * 与纤程不兼容的函数列表

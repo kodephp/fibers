@@ -15,7 +15,7 @@ class Environment
     /**
      * 最低支持的 PHP 版本
      */
-    public const string MIN_PHP_VERSION = '8.3.0';
+    public const string MIN_PHP_VERSION = '8.4.0';
 
     /**
      * 支持析构中安全 suspend 的最低 PHP 版本 ID（PHP 8.4+）

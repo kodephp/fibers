@@ -126,7 +126,7 @@ class EnhancementsTest extends TestCase
     public function testDiagnosticsMinPhpVersionMatchesComposer(): void
     {
         $ref = new \ReflectionClass(\Kode\Fibers\Support\Diagnostics::class);
-        $this->assertSame('8.3.0', $ref->getConstant('MIN_PHP_VERSION'));
+        $this->assertSame('8.4.0', $ref->getConstant('MIN_PHP_VERSION'));
     }
 
     public function testAsyncIoParallelReturnsResults(): void
