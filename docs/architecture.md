@@ -27,6 +27,6 @@
 
 ## PHP 8.5 兼容策略
 
-- 保持对 PHP 8.1+ 的兼容实现
+- 保持对 PHP 8.4+ 的兼容实现
 - 通过 `Fibers::runtimeFeatures()` 暴露运行时特征，便于在业务层做分支适配
 - 新增便捷方法 `go/withContext/batch/resilientBatch`，降低调用复杂度

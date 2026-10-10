@@ -55,7 +55,7 @@ class Php85Features
             'pipe_support' => self::supportsPipe(),
             'enhanced_curl' => self::supportsEnhancedCurl(),
             'fiber_local' => method_exists(\Fiber::class, 'getLocal'),
-            'destruct_suspend' => PHP_VERSION_ID >= 80400,
+            'destruct_suspend' => true,
         ];
     }
 

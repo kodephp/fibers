@@ -13,12 +13,8 @@ echo "========================\n\n";
 // 检查PHP版本
 echo "PHP版本信息:\n";
 echo "  PHP版本: " . PHP_VERSION . "\n";
-echo "  是否支持Fiber: " . (version_compare(PHP_VERSION, '8.1.0') >= 0 ? '是' : '否') . "\n";
-if (version_compare(PHP_VERSION, '8.1.0') < 0) {
-    die("  错误: 需要PHP 8.1或更高版本\n");
-}
-
-echo "  析构函数中Fiber限制: " . (PHP_VERSION_ID >= 80400 ? '无限制' : '限制(需安全模式)') . "\n\n";
+echo "  是否支持Fiber: 是\n";
+echo "  析构函数中Fiber限制: 无（PHP 8.4+ 原生支持）\n\n";
 
 // 获取CPU信息
 echo "CPU信息:\n";

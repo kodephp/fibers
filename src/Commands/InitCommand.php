@@ -215,7 +215,7 @@ return [
     'features' => [
         'auto_suspend_io' => true,
         'enable_monitoring' => true,
-        'strict_destruct_check' => version_compare(PHP_VERSION, '8.4.0', '<'),
+        'strict_destruct_check' => false,
     ],
     
     /*

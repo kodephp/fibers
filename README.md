@@ -6,8 +6,7 @@
 
 ## ✅ 特性概览
 
-- ✅ **PHP 8.4+ 原生 Fiber 支持**（充分利用 typed constants、`#[\Override]`、`json_validate()` 等新特性）
-- ⚠️ **PHP <8.4 析构函数中禁止切换 Fiber 的自动降级处理**
+- ✅ **PHP 8.4+ 原生 Fiber 支持**（充分利用 typed constants、`#[\Override]`、`json_validate()` 等新特性，析构函数中可安全 suspend）
 - 🧩 **一键启用协程模式（非侵入式）**
 - 🔁 **高性能 Fiber 池 + 自动回收机制**
 - 💬 **Fiber 间通信：Channel、Queue**
@@ -37,7 +36,7 @@
 ## 📖 项目背景
 
 `kode/fibers` 旨在为 Laravel、Symfony、Yii3、ThinkPHP8 及自建框架提供统一的纤程运行时能力，减少业务接入并发模型时的改造成本。\
-项目重点解决三类问题：PHP 版本差异（尤其是 PHP<8.4 的析构限制）、生产场景下的并发治理（池化、超时、重试、通信）、以及跨框架可移植性（统一配置与 CLI 初始化）。
+项目重点解决三类问题：生产场景下的并发治理（池化、超时、重试、通信）、跨框架可移植性（统一配置与 CLI 初始化）、以及运行时可诊断性（环境诊断与自检）。
 
 ## 🧭 定位：纯 PHP 官方协程方案
 
@@ -280,35 +279,16 @@ $pool = new FiberPool([
 
 ## 🧰 核心功能详解
 
-### ✅ 1. PHP 版本兼容性处理（含析构限制规避）
+### ✅ 1. PHP 版本兼容性处理
 
-> ⚠️ PHP 8.4 之前：**不允许在** **`__destruct()`** **中调用** **`Fiber::suspend()`**
+> ✅ PHP 8.4 起：**允许在** **`__destruct()`** **中调用** **`Fiber::suspend()`**（v5.0.0 起最低要求 PHP 8.4+）
 
-我们通过静态分析和运行时检测自动处理此问题，确保在不同PHP版本中都能正常运行：
-
-```php
-// 内部实现示例（用户无需关心）
-if (PHP_VERSION_ID < 80400) {
-    // 启用延迟析构任务队列，避免直接在析构函数中suspend
-    Fibers::enableSafeDestructMode();
-}
-```
-
-#### 自动降级策略：
+在 PHP 8.4 之前，析构函数中调用 `Fiber::suspend()` 会触发 Error；v5.0.0 起包要求 `php: ^8.4`，composer 安装阶段即保证运行时满足此语义，因此早期版本用于规避该限制的「安全析构模式 / 延迟析构任务队列」机制已整体移除（`Fibers::enableSafeDestructMode()` 保留为空操作、`Fibers::deferDestructTask()` 直接立即执行，以兼容旧调用方）。
 
 | 条件                  | 行为                           |
 | ------------------- | ---------------------------- |
-| PHP < 8.4           | 抛出异常，不支持（v5.0.0 起最低要求 8.4+）  |
+| PHP < 8.4           | 不支持（composer 拒绝安装，v5.0.0 起最低要求 8.4+） |
 | PHP >= 8.4          | 正常允许在析构函数中使用suspend操作        |
-
-可通过配置关闭严格模式：
-
-```php
-// config/fibers.php
-return [
-    'strict_destruct_check' => false, // 开发调试时可关闭
-];
-```
 
 ### ✅ 2. 纤程池（Fiber Pool）高级用法
 
@@ -411,7 +391,7 @@ return [
     'features' => [
         'auto_suspend_io' => true,
         'enable_monitoring' => true,
-        'strict_destruct_check' => env('APP_ENV') === 'production'
+        'strict_destruct_check' => false
     ],
     // 环境检测配置
     'environment' => [
@@ -592,11 +572,9 @@ if (!Environment::hasRequiredExtensions(['curl', 'mbstring'])) {
     // 提示用户安装扩展
 }
 
-// 检查是否可以在析构函数中安全使用Fiber
+// 检查是否可以在析构函数中安全使用Fiber（PHP 8.4+ 恒为 true，保留以兼容旧调用方）
 if (Environment::supportsDestructInFiber()) {
-    // PHP 8.4+ 行为
-} else {
-    // PHP < 8.4 兼容行为
+    // PHP 8.4+ 行为：析构函数中可安全 suspend
 }
 ```
 

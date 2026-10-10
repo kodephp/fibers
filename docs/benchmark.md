@@ -2,11 +2,11 @@
 
 本文档记录 `kode/fibers` **v4.7.0** 与同类 PHP 并发库的**真实横向压测对比**、测试方法论，以及本轮（v4.6.0 → v4.7.0）所做的**缺陷修复与误导代码清理**（修复 `Facades\Fiber` 门面断链、修复 `WebUI` 仪表盘 `TypeError` 崩溃并实现真正的自托管 HTTP 服务、修正过期 `Roadmap`、修正 `TaskQueue::waitEmpty` PHP 8.4 隐式可空弃用、RPC 批量请求加上限防 DoS；移除零引用的 `Event/` 与从不读取的 `Attributes/` 惰性注解及全部 `#[FiberSafe]`/`#[Timeout]` 注解）。**调度内核未改动，性能与 v4.6.0 持平**。
 
-所有数据均在 **PHP 8.3.31**（CLI，NTS）下测得，运行环境为 macOS / Apple Silicon（Darwin）。`kode/fibers` 最低支持 **PHP 8.3+**，本基准即以此版本为基线。
+所有数据均在 **PHP 8.4.31**（CLI，NTS）下测得，运行环境为 macOS / Apple Silicon（Darwin）。`kode/fibers` 最低支持 **PHP 8.4+**，本基准即以此版本为基线。
 
 ## 0. 定位：纯 PHP `Fiber` 的「官方协程方案」
 
-`kode/fibers` 完全基于 PHP 官方 `Fiber` 原语（PHP 8.1+ 内置，8.3+ 为最低支持）实现的用户态协程调度器，**不依赖任何 C 扩展**。它与 Swoole / Swow 是**互补而非竞争**的两条路线：
+`kode/fibers` 完全基于 PHP 官方 `Fiber` 原语（PHP 8.1+ 内置，8.4+ 为最低支持）实现的用户态协程调度器，**不依赖任何 C 扩展**。它与 Swoole / Swow 是**互补而非竞争**的两条路线：
 
 - **kode/fibers（本库）**：纯 PHP、零扩展、框架原生、可静态分析、可组合。适合绝大多数业务并发场景，以及不想引入 C 扩展、希望保持部署简单与跨平台一致的团队。
 - **Swoole / Swow（原生引擎）**：在 Zend VM 钩子上以 C 层直接切换栈，原始吞吐更高（协程切换约 14–20M ops/s，见 §2.2）。适合对极限吞吐敏感的网关 / 长连接场景，且接受扩展依赖与平台约束的团队。

@@ -46,7 +46,7 @@ return [
     'features' => [
         'auto_suspend_io' => true,
         'enable_monitoring' => true,
-        'strict_destruct_check' => version_compare(PHP_VERSION, '8.4.0', '<'), // 在PHP < 8.4时启用严格析构检查
+        'strict_destruct_check' => false,
     ],
     
     /*

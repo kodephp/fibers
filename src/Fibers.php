@@ -87,7 +87,7 @@ use Kode\Fibers\Task\Task;
 class Fibers
 {
     /** @var string 版本号（与 composer.json 的 version 保持同步，漏改由 VersionGuardTest 拦下） */
-    public const string VERSION = '5.0.0';
+    public const string VERSION = '5.0.1';
 
     /**
      * 获取本包版本号
@@ -96,20 +96,6 @@ class Fibers
     {
         return self::VERSION;
     }
-
-    /**
-     * 是否启用安全析构模式
-     *
-     * @var bool
-     */
-    protected static bool $safeDestructMode = false;
-
-    /**
-     * 延迟执行的析构任务队列
-     *
-     * @var array
-     */
-    protected static array $deferredDestructTasks = [];
 
     /**
      * 当前应用的上下文数据
@@ -131,11 +117,6 @@ class Fibers
         // 检查环境
         Environment::check();
 
-        // 自动启用安全析构模式（针对PHP < 8.4）
-        if (PHP_VERSION_ID < 80400 && !static::$safeDestructMode) {
-            static::enableSafeDestructMode();
-        }
-
         try {
             return Runtime::execute($task, $timeout);
         } catch (CancelledException | FiberException $e) {
@@ -143,9 +124,6 @@ class Fibers
             throw $e;
         } catch (\Throwable $e) {
             throw new FiberException('Fiber execution failed: ' . $e->getMessage(), (int)$e->getCode(), $e);
-        } finally {
-            // 执行延迟的析构任务（如果有的话）
-            static::processDeferredDestructTasks();
         }
     }
 
@@ -267,11 +245,6 @@ class Fibers
      */
     public static function pool(array $options = []): FiberPool
     {
-        // 自动启用安全析构模式（针对PHP < 8.4）
-        if (PHP_VERSION_ID < 80400 && !static::$safeDestructMode) {
-            static::enableSafeDestructMode();
-        }
-        
         // 设置默认池大小为CPU核心数的4倍
         if (!isset($options['size'])) {
             $options['size'] = max(4, CpuInfo::get() * 4);
@@ -303,65 +276,31 @@ class Fibers
     }
 
     /**
-     * 启用安全析构模式（针对PHP < 8.4）
+     * 启用安全析构模式（PHP 8.4+ 下为无操作）
+     *
+     * PHP 8.4 起原生允许在析构函数中 Fiber::suspend()，
+     * 本方法保留仅为兼容旧调用方，不再有任何效果。
      *
      * @return void
      */
     public static function enableSafeDestructMode(): void
     {
-        if (PHP_VERSION_ID < 80400 && !static::$safeDestructMode) {
-            static::$safeDestructMode = true;
-            
-            // 注册一个shutdown函数来处理延迟的析构任务
-            register_shutdown_function(function() {
-                static::processDeferredDestructTasks();
-            });
-        }
     }
 
     /**
      * 延迟析构任务
      *
-     * 用于PHP < 8.4版本中，在析构函数中无法安全调用Fiber::suspend()的情况
+     * PHP >= 8.4 不需要延迟执行：任务立即执行。
      *
      * @param callable $task 要延迟执行的任务
      * @return void
      */
     public static function deferDestructTask(callable $task): void
     {
-        if (PHP_VERSION_ID >= 80400) {
-            // PHP >= 8.4不需要延迟执行
-            try {
-                $task();
-            } catch (\Throwable $e) {
-                error_log('Error in destruct task: ' . $e->getMessage());
-            }
-            return;
-        }
-
-        if (static::$safeDestructMode) {
-            static::$deferredDestructTasks[] = $task;
-        }
-    }
-
-    /**
-     * 处理延迟的析构任务
-     *
-     * @return void
-     */
-    protected static function processDeferredDestructTasks(): void
-    {
-        if (!empty(static::$deferredDestructTasks)) {
-            $tasks = static::$deferredDestructTasks;
-            static::$deferredDestructTasks = [];
-            
-            foreach ($tasks as $task) {
-                try {
-                    $task();
-                } catch (\Throwable $e) {
-                    // 忽略析构任务中的异常
-                }
-            }
+        try {
+            $task();
+        } catch (\Throwable $e) {
+            error_log('Error in destruct task: ' . $e->getMessage());
         }
     }
 
@@ -827,7 +766,7 @@ class Fibers
             'php_version' => PHP_VERSION,
             'php_version_id' => PHP_VERSION_ID,
             'native_fiber' => class_exists(\Fiber::class),
-            'safe_destruct_supported' => PHP_VERSION_ID >= 80400,
+            'safe_destruct_supported' => true,
             'php85_or_newer' => PHP_VERSION_ID >= 80500,
         ];
     }

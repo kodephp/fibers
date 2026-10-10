@@ -12,7 +12,7 @@ use Kode\Fibers\Exceptions\FiberException;
 class Diagnostics
 {
     /**
-     * 最小支持的PHP版本（与 composer.json 的 "php": "^8.3" 保持一致）
+     * 最小支持的PHP版本（与 composer.json 的 "php": "^8.4" 保持一致）
      */
     public const MIN_PHP_VERSION = '8.4.0';
 
@@ -182,16 +182,6 @@ class Diagnostics
                 'type' => 'xdebug_enabled',
                 'message' => 'Xdebug已启用，这会严重影响纤程性能',
                 'severity' => 'warning'
-            ];
-        }
-        
-        // 检查析构函数限制（PHP 8.4之前）
-        $hasDestructorRestriction = PHP_VERSION_ID < 80400;
-        if ($hasDestructorRestriction) {
-            $issues[] = [
-                'type' => 'destructor_restriction',
-                'message' => 'PHP 8.4之前的版本不允许在析构函数中切换纤程',
-                'severity' => 'info'
             ];
         }
         

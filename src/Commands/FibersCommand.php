@@ -52,7 +52,7 @@ class FibersCommand
                     $out->line("Recommended Pool Size: " . min($cpuCount * 4, 32));
                     $out->line("");
                     $out->line("PHP Version: " . PHP_VERSION);
-                    $out->line("Fiber Support: " . (version_compare(PHP_VERSION, '8.1.0') >= 0 ? 'Yes' : 'No'));
+                    $out->line("Fiber Support: Yes");
                     return 0;
                 }
 
@@ -154,7 +154,7 @@ class FibersCommand
         echo "=============\n";
         echo "CPU Cores: " . CpuInfo::get() . "\n";
         echo "PHP Version: " . PHP_VERSION . "\n";
-        echo "Fiber Support: " . (version_compare(PHP_VERSION, '8.1.0') >= 0 ? 'Yes' : 'No') . "\n";
+        echo "Fiber Support: Yes\n";
         return 0;
     }
 
