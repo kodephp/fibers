@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "587b16a50a31e67fd4b2486705acef53",
+    "content-hash": "b134318cf401298bebd27b7695786636",
     "packages": [
         {
             "name": "guzzlehttp/psr7",
@@ -127,16 +127,16 @@
         },
         {
             "name": "kode/console",
-            "version": "5.0.3",
+            "version": "5.0.4",
             "source": {
                 "type": "git",
                 "url": "https://github.com/kodephp/console.git",
-                "reference": "0a9ecf5b766bd9840c0be36086389bdb56dc1c33"
+                "reference": "72143aba213ae0f54edbcfffd4bc86d8e61d7c25"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/kodephp/console/zipball/0a9ecf5b766bd9840c0be36086389bdb56dc1c33",
-                "reference": "0a9ecf5b766bd9840c0be36086389bdb56dc1c33",
+                "url": "https://api.github.com/repos/kodephp/console/zipball/72143aba213ae0f54edbcfffd4bc86d8e61d7c25",
+                "reference": "72143aba213ae0f54edbcfffd4bc86d8e61d7c25",
                 "shasum": ""
             },
             "require": {
@@ -184,9 +184,9 @@
             ],
             "support": {
                 "issues": "https://github.com/kodephp/console/issues",
-                "source": "https://github.com/kodephp/console/tree/v5.0.3"
+                "source": "https://github.com/kodephp/console/tree/v5.0.4"
             },
-            "time": "2026-10-11T05:17:29+00:00"
+            "time": "2026-10-11T10:47:24+00:00"
         },
         {
             "name": "kode/context",
