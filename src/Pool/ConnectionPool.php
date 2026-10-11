@@ -603,7 +603,7 @@ class ConnectionPool implements ConnectionPoolInterface
      * @param array $poolConfig 连接池配置
      * @return self
      */
-    public static function pdo(string $dsn, string $username = '', string $password = '', array $options = [], array $poolConfig = []): self
+    public static function pdo(string $dsn, string $username = '', #[\SensitiveParameter] string $password = '', array $options = [], array $poolConfig = []): self
     {
         $pool = new self($poolConfig);
 
@@ -640,7 +640,7 @@ class ConnectionPool implements ConnectionPoolInterface
      * @param array $poolConfig 连接池配置
      * @return self
      */
-    public static function redis(string $host = '127.0.0.1', int $port = 6379, string $password = '', int $database = 0, array $poolConfig = []): self
+    public static function redis(string $host = '127.0.0.1', int $port = 6379, #[\SensitiveParameter] string $password = '', int $database = 0, array $poolConfig = []): self
     {
         $pool = new self($poolConfig);
 

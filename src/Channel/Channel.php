@@ -576,7 +576,7 @@ class Channel
     /**
      * 创建一个 MySQL 操作通道
      */
-    public static function mysql(string $name, string $dsn, string $username = '', string $password = '', array $options = []): self
+    public static function mysql(string $name, string $dsn, string $username = '', #[\SensitiveParameter] string $password = '', array $options = []): self
     {
         $channel = self::make($name, 10);
 
@@ -588,7 +588,7 @@ class Channel
     /**
      * 创建一个 Redis 操作通道
      */
-    public static function redis(string $name, string $host = '127.0.0.1', int $port = 6379, string $password = '', int $database = 0): self
+    public static function redis(string $name, string $host = '127.0.0.1', int $port = 6379, #[\SensitiveParameter] string $password = '', int $database = 0): self
     {
         $channel = self::make($name, 10);
 

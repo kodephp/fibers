@@ -87,7 +87,7 @@ use Kode\Fibers\Task\Task;
 class Fibers
 {
     /** @var string 版本号（与 composer.json 的 version 保持同步，漏改由 VersionGuardTest 拦下） */
-    public const string VERSION = '5.0.2';
+    public const string VERSION = '5.0.3';
 
     /**
      * 获取本包版本号
@@ -821,7 +821,7 @@ class Fibers
      * @param array $poolConfig 连接池配置
      * @return ConnectionPool
      */
-    public static function pdoPool(string $dsn, string $username = '', string $password = '', array $options = [], array $poolConfig = []): ConnectionPool
+    public static function pdoPool(string $dsn, string $username = '', #[\SensitiveParameter] string $password = '', array $options = [], array $poolConfig = []): ConnectionPool
     {
         return ConnectionPool::pdo($dsn, $username, $password, $options, $poolConfig);
     }
@@ -836,7 +836,7 @@ class Fibers
      * @param array $poolConfig 连接池配置
      * @return ConnectionPool
      */
-    public static function redisPool(string $host = '127.0.0.1', int $port = 6379, string $password = '', int $database = 0, array $poolConfig = []): ConnectionPool
+    public static function redisPool(string $host = '127.0.0.1', int $port = 6379, #[\SensitiveParameter] string $password = '', int $database = 0, array $poolConfig = []): ConnectionPool
     {
         return ConnectionPool::redis($host, $port, $password, $database, $poolConfig);
     }
