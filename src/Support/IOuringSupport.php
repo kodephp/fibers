@@ -146,7 +146,7 @@ class IOuringSupport
             return null;
         }
 
-        return @call_user_func($setupFunc, 32);
+        return @$setupFunc(32);
     }
 
     protected static function createNativeHandle(string $path, string $mode): mixed
