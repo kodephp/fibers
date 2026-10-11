@@ -62,6 +62,7 @@ class Response
         return $this->statusCode >= 500;
     }
 
+    #[\Override]
     public function __toString(): string
     {
         return $this->body;

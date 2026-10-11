@@ -48,6 +48,7 @@ class Fiber extends Facade
      *
      * @return string
      */
+    #[\Override]
     protected static function getFacadeAccessor(): string
     {
         return 'fibers';

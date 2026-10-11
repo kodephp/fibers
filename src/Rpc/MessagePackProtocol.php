@@ -9,6 +9,7 @@ namespace Kode\Fibers\Rpc;
  */
 class MessagePackProtocol implements RpcProtocolInterface
 {
+    #[\Override]
     public function encode(array $data): string
     {
         if (function_exists('msgpack_pack')) {
@@ -18,6 +19,7 @@ class MessagePackProtocol implements RpcProtocolInterface
         return (string) json_encode($data);
     }
 
+    #[\Override]
     public function decode(string $data): array
     {
         if (function_exists('msgpack_unpack')) {
@@ -30,6 +32,7 @@ class MessagePackProtocol implements RpcProtocolInterface
         return is_array($decoded) ? $decoded : [];
     }
 
+    #[\Override]
     public function getName(): string
     {
         return 'msgpack';

@@ -66,6 +66,7 @@ class DatabaseTransactionStorage implements TransactionStorageInterface
         $this->pdo->exec("CREATE INDEX IF NOT EXISTS {$this->table}_idx_created_at ON {$this->table} (created_at)");
     }
 
+    #[\Override]
     public function save(TransactionRecord $record): bool
     {
         $columns = 'id, mode, status, participants, log, created_at, updated_at, completed_at, retry_count';
@@ -92,6 +93,7 @@ class DatabaseTransactionStorage implements TransactionStorageInterface
         ]);
     }
 
+    #[\Override]
     public function load(string $transactionId): ?TransactionRecord
     {
         $sql = "SELECT * FROM {$this->table} WHERE id = :id";
@@ -116,6 +118,7 @@ class DatabaseTransactionStorage implements TransactionStorageInterface
         ]);
     }
 
+    #[\Override]
     public function update(string $transactionId, array $data): bool
     {
         $record = $this->load($transactionId);
@@ -133,6 +136,7 @@ class DatabaseTransactionStorage implements TransactionStorageInterface
         return $this->save($record);
     }
 
+    #[\Override]
     public function delete(string $transactionId): bool
     {
         $sql = "DELETE FROM {$this->table} WHERE id = :id";
@@ -140,11 +144,13 @@ class DatabaseTransactionStorage implements TransactionStorageInterface
         return $stmt->execute([':id' => $transactionId]);
     }
 
+    #[\Override]
     public function listPending(int $limit = 100): array
     {
         return $this->listByStatus(TransactionRecord::STATUS_PENDING, $limit);
     }
 
+    #[\Override]
     public function listByStatus(string $status, int $limit = 100): array
     {
         $sql = "SELECT * FROM {$this->table} WHERE status = :status ORDER BY created_at ASC LIMIT :limit";

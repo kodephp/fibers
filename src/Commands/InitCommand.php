@@ -37,6 +37,7 @@ class InitCommand extends Command
     /**
      * 执行命令
      */
+    #[\Override]
     public function fire(Input $in, Output $out): int
     {
         $framework = (string) $in->arg(1, 'default');

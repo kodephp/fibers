@@ -20,6 +20,7 @@ class FileTransactionStorage implements TransactionStorageInterface
         }
     }
 
+    #[\Override]
     public function save(TransactionRecord $record): bool
     {
         $file = $this->getFilePath($record->id);
@@ -27,6 +28,7 @@ class FileTransactionStorage implements TransactionStorageInterface
         return file_put_contents($file, $data) !== false;
     }
 
+    #[\Override]
     public function load(string $transactionId): ?TransactionRecord
     {
         $file = $this->getFilePath($transactionId);
@@ -37,6 +39,7 @@ class FileTransactionStorage implements TransactionStorageInterface
         return $data ? TransactionRecord::fromArray($data) : null;
     }
 
+    #[\Override]
     public function update(string $transactionId, array $data): bool
     {
         $record = $this->load($transactionId);
@@ -54,6 +57,7 @@ class FileTransactionStorage implements TransactionStorageInterface
         return $this->save($record);
     }
 
+    #[\Override]
     public function delete(string $transactionId): bool
     {
         $file = $this->getFilePath($transactionId);
@@ -63,11 +67,13 @@ class FileTransactionStorage implements TransactionStorageInterface
         return unlink($file);
     }
 
+    #[\Override]
     public function listPending(int $limit = 100): array
     {
         return $this->listByStatus(TransactionRecord::STATUS_PENDING, $limit);
     }
 
+    #[\Override]
     public function listByStatus(string $status, int $limit = 100): array
     {
         $records = [];

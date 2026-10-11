@@ -12,11 +12,13 @@ class FixturesAdapter implements ORMAdapterInterface
     {
     }
 
+    #[\Override]
     public function transaction(callable $callback): mixed
     {
         return Fibers::go(fn() => $callback($this->fixtures));
     }
 
+    #[\Override]
     public function query(string $statement, array $bindings = []): mixed
     {
         return Fibers::go(fn() => $this->fixtures[$statement] ?? []);

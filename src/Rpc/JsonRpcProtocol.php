@@ -9,11 +9,13 @@ namespace Kode\Fibers\Rpc;
  */
 class JsonRpcProtocol implements RpcProtocolInterface
 {
+    #[\Override]
     public function encode(array $data): string
     {
         return json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
+    #[\Override]
     public function decode(string $data): array
     {
         // JSON 解码失败时返回的分隔符必须是数组，调用方（RpcServer / RpcClient）
@@ -24,6 +26,7 @@ class JsonRpcProtocol implements RpcProtocolInterface
         return is_array($decoded) ? $decoded : [];
     }
 
+    #[\Override]
     public function getName(): string
     {
         return 'json';
