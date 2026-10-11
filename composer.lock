@@ -127,16 +127,16 @@
         },
         {
             "name": "kode/console",
-            "version": "5.0.4",
+            "version": "5.0.5",
             "source": {
                 "type": "git",
                 "url": "https://github.com/kodephp/console.git",
-                "reference": "72143aba213ae0f54edbcfffd4bc86d8e61d7c25"
+                "reference": "bb66e2a0b05c7bbb196b8a24f42be7785a0fab99"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/kodephp/console/zipball/72143aba213ae0f54edbcfffd4bc86d8e61d7c25",
-                "reference": "72143aba213ae0f54edbcfffd4bc86d8e61d7c25",
+                "url": "https://api.github.com/repos/kodephp/console/zipball/bb66e2a0b05c7bbb196b8a24f42be7785a0fab99",
+                "reference": "bb66e2a0b05c7bbb196b8a24f42be7785a0fab99",
                 "shasum": ""
             },
             "require": {
@@ -184,9 +184,9 @@
             ],
             "support": {
                 "issues": "https://github.com/kodephp/console/issues",
-                "source": "https://github.com/kodephp/console/tree/v5.0.4"
+                "source": "https://github.com/kodephp/console"
             },
-            "time": "2026-10-11T10:47:24+00:00"
+            "time": "2026-10-11T16:54:10+00:00"
         },
         {
             "name": "kode/context",
