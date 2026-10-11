@@ -3,7 +3,7 @@
     "description": "Kode/Fibers - 高性能 PHP Fiber 协程调度器。提供协程池、上下文传递、分布式调度、断路器、负载均衡、RPC 通信（JSON/gRPC/WebSocket）、分布式事务（2PC/TCC/Saga）、多框架集成等企业级特性。",
     "type": "library",
     "license": "Apache-2.0",
-    "version": "5.0.4",
+    "version": "5.0.5",
     "authors": [
         {
             "name": "Kode Team",
@@ -25,11 +25,18 @@
         "revolt/event-loop": "^1.0"
     },
     "suggest": {
+        "ext-pdo": "PDO 扩展 - 用于 SQLite/PDO 缓存驱动",
+        "ext-posix": "POSIX 扩展 - 用于 IOuring 探测等信号支持",
+        "ext-redis": "Redis 扩展 - 用于 Redis 池/存储",
         "kode/facade": "可选；未安装时自动降级为基础静态代理（native driver）",
         "kode/http-client": "可选；未安装时自动降级为内置 HTTP 驱动",
         "ext-curl": "用于 HTTP 客户端 cURL 驱动",
         "ext-swoole": "用于 Swoole 协程支持",
         "ext-swow": "用于 Swow 协程支持"
+    },
+    "support": {
+        "issues": "https://github.com/kodephp/fibers/issues",
+        "source": "https://github.com/kodephp/fibers"
     },
     "autoload": {
         "psr-4": {
