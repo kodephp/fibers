@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "2161f4bdef0b58719cad4af6c802fb51",
+    "content-hash": "ada6d32fda62cfe8d4417c67463be925",
     "packages": [
         {
             "name": "guzzlehttp/psr7",
@@ -127,16 +127,16 @@
         },
         {
             "name": "kode/console",
-            "version": "5.0.5",
+            "version": "5.1.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/kodephp/console.git",
-                "reference": "bb66e2a0b05c7bbb196b8a24f42be7785a0fab99"
+                "reference": "e9a99f8396298647ecb6367a3d3870bd2ed5fef1"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/kodephp/console/zipball/bb66e2a0b05c7bbb196b8a24f42be7785a0fab99",
-                "reference": "bb66e2a0b05c7bbb196b8a24f42be7785a0fab99",
+                "url": "https://api.github.com/repos/kodephp/console/zipball/e9a99f8396298647ecb6367a3d3870bd2ed5fef1",
+                "reference": "e9a99f8396298647ecb6367a3d3870bd2ed5fef1",
                 "shasum": ""
             },
             "require": {
@@ -186,20 +186,20 @@
                 "issues": "https://github.com/kodephp/console/issues",
                 "source": "https://github.com/kodephp/console"
             },
-            "time": "2026-10-11T16:54:10+00:00"
+            "time": "2026-10-12T01:41:29+00:00"
         },
         {
             "name": "kode/context",
-            "version": "4.0.1",
+            "version": "4.0.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/kodephp/context.git",
-                "reference": "243f408794fc0b766d381caa4bbf3401894da4cf"
+                "reference": "c030530f43d4dec5cb125e00a6c100c60faf1bff"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/kodephp/context/zipball/243f408794fc0b766d381caa4bbf3401894da4cf",
-                "reference": "243f408794fc0b766d381caa4bbf3401894da4cf",
+                "url": "https://api.github.com/repos/kodephp/context/zipball/c030530f43d4dec5cb125e00a6c100c60faf1bff",
+                "reference": "c030530f43d4dec5cb125e00a6c100c60faf1bff",
                 "shasum": ""
             },
             "require": {
@@ -260,7 +260,7 @@
                 "issues": "https://github.com/kodephp/context/issues",
                 "source": "https://github.com/kodephp/context"
             },
-            "time": "2026-10-10T16:50:25+00:00"
+            "time": "2026-10-12T01:41:31+00:00"
         },
         {
             "name": "psr/http-factory",
