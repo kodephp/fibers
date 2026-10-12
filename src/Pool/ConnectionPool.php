@@ -513,6 +513,12 @@ class ConnectionPool implements ConnectionPoolInterface
             return spl_object_id($connection) . ':' . $connection::class;
         }
 
+        if (is_resource($connection)) {
+            // 资源（流/socket 等）没有对象哈希；serialize() 会把所有资源压成同一个
+            // 标量，导致池内连接 ID 相撞——取而代之用资源 ID + 类型，保证一一对应。
+            return 'resource:' . get_resource_id($connection) . ':' . get_resource_type($connection);
+        }
+
         return md5(serialize($connection));
     }
 
