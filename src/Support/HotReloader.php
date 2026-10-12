@@ -239,13 +239,7 @@ class HotReloader
      */
     protected function shouldExclude(string $path): bool
     {
-        foreach ($this->excludePatterns as $pattern) {
-            if (str_contains($path, $pattern)) {
-                return true;
-            }
-        }
-        
-        return false;
+        return array_any($this->excludePatterns, fn($pattern) => str_contains($path, $pattern));
     }
 
     /**

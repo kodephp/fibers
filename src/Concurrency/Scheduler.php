@@ -646,13 +646,7 @@ final class Scheduler
         $coroutines = $this->goAll($tasks);
 
         $this->run(static function () use ($coroutines): bool {
-            foreach ($coroutines as $coroutine) {
-                if (!$coroutine->isFinished()) {
-                    return false;
-                }
-            }
-
-            return true;
+            return array_all($coroutines, fn($coroutine) => $coroutine->isFinished());
         });
 
         $results = [];

@@ -106,13 +106,7 @@ class Environment
         $disabledFunctions = explode(',', (string) ini_get('disable_functions'));
         $disabledFunctions = array_map('trim', $disabledFunctions);
 
-        foreach ($functions as $function) {
-            if (in_array($function, $disabledFunctions, true)) {
-                return true;
-            }
-        }
-
-        return false;
+        return array_any($functions, fn($function) => in_array($function, $disabledFunctions, true));
     }
 
     /**
@@ -123,12 +117,6 @@ class Environment
      */
     public static function hasRequiredExtensions(array $extensions): bool
     {
-        foreach ($extensions as $extension) {
-            if (!extension_loaded($extension)) {
-                return false;
-            }
-        }
-
-        return true;
+        return array_all($extensions, fn($extension) => extension_loaded($extension));
     }
 }
