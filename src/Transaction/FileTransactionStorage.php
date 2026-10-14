@@ -25,7 +25,19 @@ class FileTransactionStorage implements TransactionStorageInterface
     {
         $file = $this->getFilePath($record->id);
         $data = json_encode($record->toArray(), JSON_UNESCAPED_UNICODE);
-        return file_put_contents($file, $data) !== false;
+
+        // temp + rename 原子替换：并发场景下读者要么看到旧完整文件、要么看到新完整文件，
+        // 不会读到半写内容（与 session FileDriver / queue FileFailedJobStore 同口径）。
+        $tmp = $file . '.' . bin2hex(random_bytes(8)) . '.tmp';
+        if (file_put_contents($tmp, $data, LOCK_EX) === false) {
+            return false;
+        }
+        if (!@rename($tmp, $file)) {
+            @unlink($tmp);
+            return false;
+        }
+
+        return true;
     }
 
     #[\Override]
