@@ -264,6 +264,13 @@ class CpuInfo
      */
     public static function getRecommendedConcurrency(int $memoryPerTaskMB = 20, int $cpuMultiplier = 4, bool $forceRefresh = false): int
     {
+        if ($memoryPerTaskMB < 1) {
+            throw new \InvalidArgumentException('memoryPerTaskMB 必须 >= 1');
+        }
+        if ($cpuMultiplier < 1) {
+            throw new \InvalidArgumentException('cpuMultiplier 必须 >= 1');
+        }
+
         // 获取CPU核心数
         $cpuCount = self::get($forceRefresh);
         $cpuBasedConcurrency = $cpuCount * $cpuMultiplier;
