@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "ada6d32fda62cfe8d4417c67463be925",
+    "content-hash": "1a99bb1bba67d664129ef6a435fcafd8",
     "packages": [
         {
             "name": "guzzlehttp/psr7",
@@ -190,16 +190,16 @@
         },
         {
             "name": "kode/context",
-            "version": "4.0.2",
+            "version": "4.0.3",
             "source": {
                 "type": "git",
                 "url": "https://github.com/kodephp/context.git",
-                "reference": "c030530f43d4dec5cb125e00a6c100c60faf1bff"
+                "reference": "2edb44513af6bcd9e14ff6741c92284f26c08c66"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/kodephp/context/zipball/c030530f43d4dec5cb125e00a6c100c60faf1bff",
-                "reference": "c030530f43d4dec5cb125e00a6c100c60faf1bff",
+                "url": "https://api.github.com/repos/kodephp/context/zipball/2edb44513af6bcd9e14ff6741c92284f26c08c66",
+                "reference": "2edb44513af6bcd9e14ff6741c92284f26c08c66",
                 "shasum": ""
             },
             "require": {
@@ -260,7 +260,7 @@
                 "issues": "https://github.com/kodephp/context/issues",
                 "source": "https://github.com/kodephp/context"
             },
-            "time": "2026-10-12T01:41:31+00:00"
+            "time": "2026-10-14T03:54:28+00:00"
         },
         {
             "name": "psr/http-factory",
