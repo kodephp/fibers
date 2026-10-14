@@ -179,10 +179,8 @@ class RetryableTask implements Runnable
         
         // If there are specific non-retryable exceptions defined, check against them
         if (!empty($this->nonRetryableExceptions)) {
-            foreach ($this->nonRetryableExceptions as $nonRetryableException) {
-                if ($e instanceof $nonRetryableException) {
-                    return false;
-                }
+            if (array_any($this->nonRetryableExceptions, fn($nonRetryableException) => $e instanceof $nonRetryableException)) {
+                return false;
             }
         }
         
