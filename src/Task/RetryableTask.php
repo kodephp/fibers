@@ -271,8 +271,9 @@ class RetryableTask implements Runnable
                 $baseDelay;
             
             // Apply jitter (randomly increase or decrease by up to maxJitter percentage)
+            // random_int 为 CSPRNG：抖动安全性要求低，但与生态其它随机出口保持一致
             $jitter = $delay * $maxJitter;
-            $delay += (rand(0, 200) / 100 - 1) * $jitter;
+            $delay += (random_int(0, 200) / 100 - 1) * $jitter;
             
             return max(0, $delay); // Ensure delay is not negative
         };
