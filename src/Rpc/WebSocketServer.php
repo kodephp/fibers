@@ -13,7 +13,9 @@ class WebSocketServer
 {
     protected string $host;
     protected int $port;
+    /** @var resource|null */
     protected $socket;
+    /** @var array<string, resource> */
     protected array $clients = [];
     protected array $services = [];
     protected array $middleware = [];
@@ -101,6 +103,8 @@ class WebSocketServer
 
     /**
      * 处理连接
+     *
+     * @param resource $client
      */
     protected function handleConnection($client): void
     {
@@ -147,6 +151,8 @@ class WebSocketServer
 
     /**
      * 读取 HTTP 头
+     *
+     * @param resource $client
      */
     protected function readHeaders($client): array
     {
@@ -278,6 +284,7 @@ class WebSocketServer
      * 客户端发往服务端的帧按 RFC 6455 必须带掩码，这里读取并还原真实载荷；
      * 同时处理 close/ping/pong 控制帧的语义，返回结构化结果交由调用方分流。
      *
+     * @param  resource $client
      * @return array{opcode:int, payload:string, fin:bool}|null 连接关闭或读取出错时返回 null
      */
     protected function readFrame($client): ?array
@@ -358,6 +365,8 @@ class WebSocketServer
      *
      * 服务端发往客户端的帧不得带掩码；$opcode 默认 0x81（FIN + 文本帧），
      * ping 响应使用 0x8A（FIN + pong）。
+     *
+     * @param resource $client
      */
     protected function sendFrame($client, string $data, int $opcode = 0x81): void
     {

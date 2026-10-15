@@ -143,8 +143,8 @@ class FiberPool
         }
 
         throw new FiberException(
-            sprintf('Task failed after %d attempts: %s', $maxRetries + 1, $lastError?->getMessage() ?? 'unknown'),
-            (int)($lastError?->getCode() ?? 0),
+            sprintf('Task failed after %d attempts: %s', $maxRetries + 1, $lastError->getMessage()),
+            (int) $lastError->getCode(),
             $lastError
         );
     }

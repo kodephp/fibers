@@ -169,7 +169,6 @@ class Request
      *
      * @param string $name The option name
      * @param mixed $value The option value
-     * @return $this
      */
     public function option(string $name, mixed $value): static
     {

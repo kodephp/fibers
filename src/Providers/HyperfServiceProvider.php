@@ -17,14 +17,14 @@ class HyperfServiceProvider
     /**
      * 应用实例
      */
-    protected $container;
+    protected mixed $container;
 
     /**
      * 创建服务提供者实例
      *
      * @param mixed $container 容器实例
      */
-    public function __construct($container)
+    public function __construct(mixed $container)
     {
         $this->container = $container;
     }

@@ -26,6 +26,8 @@ final class Coroutine
 
     /**
      * 承载本协程执行的 Fiber（由调度器在启动时绑定，结束后解绑）
+     *
+     * @var Fiber<mixed, mixed, mixed, mixed>|null
      */
     private ?Fiber $fiber = null;
 
@@ -108,6 +110,7 @@ final class Coroutine
     /**
      * 当前承载执行的 Fiber（未启动或已结束时为 null）
      *
+     * @return Fiber<mixed, mixed, mixed, mixed>|null
      * @internal 仅供 Scheduler 登记归属关系
      */
     public function fiber(): ?Fiber
@@ -149,6 +152,7 @@ final class Coroutine
      * 载体绑定也在这里完成：worker 恢复后紧接着就是本方法，中间不会有任何
      * 其它 PHP 代码观察到状态，因此不必再单开一次 bindFiber() 调用。
      *
+     * @param  Fiber<mixed, mixed, mixed, mixed> $fiber
      * @internal 仅供 Fiber 复用池的 worker 循环调用
      */
     public function execute(Fiber $fiber): void
@@ -233,11 +237,12 @@ final class Coroutine
             } else {
                 $deadline = $timeout === null ? null : Scheduler::now() + $timeout;
                 $this->scheduler->run(
-                    fn(): bool => $this->state->isFinished()
+                    // Fiber 内执行会改写 state，跨执行边界静态不可见，保留运行期护栏
+                    fn(): bool => $this->state->isFinished() // @phpstan-ignore booleanOr.leftAlwaysFalse (state 由 Fiber 内改写)
                         || ($deadline !== null && Scheduler::now() >= $deadline)
                 );
 
-                if (!$this->state->isFinished()) {
+                if (!$this->state->isFinished()) { // @phpstan-ignore booleanNot.alwaysTrue (state 由 Fiber 内改写)
                     if ($timeout !== null) {
                         throw new TimeoutException(
                             sprintf('等待协程 %s 超时（%.3fs）', $this->id(), $timeout)

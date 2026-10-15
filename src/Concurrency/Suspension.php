@@ -42,6 +42,7 @@ final class Suspension
 
     public function __construct(
         private readonly Scheduler $scheduler,
+        /** @var Fiber<mixed, mixed, mixed, mixed> */
         private readonly Fiber $fiber,
     ) {
     }

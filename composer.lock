@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "1a99bb1bba67d664129ef6a435fcafd8",
+    "content-hash": "efe0d664e975a82220b55501d9e3e16a",
     "packages": [
         {
             "name": "guzzlehttp/psr7",
@@ -720,6 +720,89 @@
             "time": "2026-07-26T14:50:43+00:00"
         },
         {
+            "name": "kode/http-client",
+            "version": "3.0.7",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/kodephp/http-client.git",
+                "reference": "1c708df5f9717b8c121a3d9f4d1a5daba9366d04"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/kodephp/http-client/zipball/1c708df5f9717b8c121a3d9f4d1a5daba9366d04",
+                "reference": "1c708df5f9717b8c121a3d9f4d1a5daba9366d04",
+                "shasum": ""
+            },
+            "require": {
+                "ext-json": "*",
+                "ext-mbstring": "*",
+                "kode/context": "^4",
+                "php": "^8.4",
+                "psr/http-client": "^1.0",
+                "psr/http-factory": "^1.0",
+                "psr/http-message": "^2.0"
+            },
+            "require-dev": {
+                "amphp/http-client": "^4.0|^5.0",
+                "amphp/socket": "^1.0|^2.0",
+                "guzzlehttp/psr7": "^2.6",
+                "phpunit/phpunit": "^11.0|^12.0"
+            },
+            "suggest": {
+                "amphp/http-client": "用于 Amp 异步 HTTP 客户端驱动",
+                "ext-curl": "用于 Curl / Fiber 驱动及并发请求",
+                "ext-swoole": "用于 Swoole 协程驱动",
+                "ext-swow": "用于 Swow 协程驱动",
+                "guzzlehttp/psr7": "PSR-7/PSR-17 消息实现（默认推荐）",
+                "kode/fibers": "用于 Fiber 协程池和调度器",
+                "nyholm/psr7": "轻量级 PSR-7/PSR-17 消息实现",
+                "psr/log": "用于 LoggingMiddleware 的 PSR-3 日志集成"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-main": "2.6.x-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Kode\\HttpClient\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Kode Team",
+                    "email": "382601296@qq.com"
+                }
+            ],
+            "description": "现代化、高性能的 PHP HTTP 客户端，支持多运行时环境（FPM、CLI、Swoole、Swow、Fiber）",
+            "homepage": "https://github.com/kodephp/http-client",
+            "keywords": [
+                "async",
+                "client",
+                "concurrent",
+                "coroutine",
+                "fiber",
+                "http",
+                "middleware",
+                "php84",
+                "psr-17",
+                "psr-18",
+                "psr-7",
+                "swoole",
+                "swow"
+            ],
+            "support": {
+                "issues": "https://github.com/kodephp/http-client/issues",
+                "source": "https://github.com/kodephp/http-client"
+            },
+            "time": "2026-10-13T13:44:21+00:00"
+        },
+        {
             "name": "myclabs/deep-copy",
             "version": "1.14.0",
             "source": {
@@ -1400,6 +1483,58 @@
                 }
             ],
             "time": "2026-10-05T05:49:30+00:00"
+        },
+        {
+            "name": "psr/http-client",
+            "version": "1.0.3",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/php-fig/http-client.git",
+                "reference": "bb5906edc1c324c9a05aa0873d40117941e5fa90"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/php-fig/http-client/zipball/bb5906edc1c324c9a05aa0873d40117941e5fa90",
+                "reference": "bb5906edc1c324c9a05aa0873d40117941e5fa90",
+                "shasum": ""
+            },
+            "require": {
+                "php": "^7.0 || ^8.0",
+                "psr/http-message": "^1.0 || ^2.0"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "1.0.x-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Psr\\Http\\Client\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "PHP-FIG",
+                    "homepage": "https://www.php-fig.org/"
+                }
+            ],
+            "description": "Common interface for HTTP clients",
+            "homepage": "https://github.com/php-fig/http-client",
+            "keywords": [
+                "http",
+                "http-client",
+                "psr",
+                "psr-18"
+            ],
+            "support": {
+                "source": "https://github.com/php-fig/http-client"
+            },
+            "time": "2023-09-23T14:17:50+00:00"
         },
         {
             "name": "react/event-loop",

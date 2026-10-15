@@ -90,6 +90,8 @@ class RpcServer
 
     /**
      * 处理客户端连接
+     *
+     * @param resource $client
      */
     protected function handleClient($client): void
     {
@@ -172,6 +174,7 @@ class RpcServer
      * 原始数据交给协议层解码——那样会把 HTTP 头误当成 JSON 导致解析失败。
      * 这里按 Content-Length 精确读取请求体，再对 body 做协议解码。
      *
+     * @param  resource $client
      * @return array{headers:array, body:string}|null 读取失败或连接关闭时返回 null
      */
     protected function readHttpRequest($client): ?array

@@ -198,7 +198,7 @@ class FiberDebugger
     /**
      * 转储纤程状态
      *
-     * @param Fiber|null $fiber 纤程实例
+     * @param  Fiber<mixed, mixed, mixed, mixed>|null $fiber 纤程实例
      * @return array
      */
     public static function dumpFiber(?Fiber $fiber = null): array

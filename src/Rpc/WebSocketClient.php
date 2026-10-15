@@ -14,6 +14,7 @@ class WebSocketClient
 {
     protected string $host;
     protected int $port;
+    /** @var resource|null */
     protected $socket;
     protected ?string $clientId = null;
     protected bool $connected = false;

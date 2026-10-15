@@ -17,7 +17,7 @@ use Kode\Fibers\Support\CpuInfo;
  */
 class FibersCommand
 {
-    protected $command;
+    protected mixed $command;
     protected bool $useNativeDriver = false;
 
     public function __construct()
@@ -37,13 +37,13 @@ class FibersCommand
                     };
                 }
 
-                protected function init($in, $out): int
+                protected function init(\Kode\Console\Input $in, \Kode\Console\Output $out): int
                 {
                     $initCommand = new InitCommand();
                     return $initCommand->fire($in, $out);
                 }
 
-                protected function status($in, $out): int
+                protected function status(\Kode\Console\Input $in, \Kode\Console\Output $out): int
                 {
                     $out->line("Fiber Status:");
                     $out->line("=============");
@@ -56,14 +56,14 @@ class FibersCommand
                     return 0;
                 }
 
-                protected function cleanup($in, $out): int
+                protected function cleanup(\Kode\Console\Input $in, \Kode\Console\Output $out): int
                 {
                     $out->line("Cleaning up zombie fibers...");
                     $out->line("Cleanup completed successfully.");
                     return 0;
                 }
 
-                protected function benchmark($in, $out): int
+                protected function benchmark(\Kode\Console\Input $in, \Kode\Console\Output $out): int
                 {
                     $concurrency = (int) ($in->opt('concurrency') ?? 10);
                     $iterations = (int) ($in->opt('iterations') ?? 1000);
@@ -79,7 +79,7 @@ class FibersCommand
                     return 0;
                 }
 
-                protected function diagnose($in, $out): int
+                protected function diagnose(\Kode\Console\Input $in, \Kode\Console\Output $out): int
                 {
                     $issues = Environment::diagnose();
                     if (empty($issues)) {
@@ -92,7 +92,7 @@ class FibersCommand
                     return 0;
                 }
 
-                protected function renderHelp($in, $out): int
+                protected function renderHelp(\Kode\Console\Input $in, \Kode\Console\Output $out): int
                 {
                     $out->line("Kode/Fibers CLI Tool");
                     $out->line("Usage: fibers <command> [options]");
@@ -184,7 +184,7 @@ class FibersCommand
         return 0;
     }
 
-    public function getCommand()
+    public function getCommand(): mixed
     {
         return $this->command;
     }

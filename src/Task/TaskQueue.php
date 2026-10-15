@@ -21,7 +21,7 @@ class TaskQueue
     /**
      * Task queue
      *
-     * @var SplPriorityQueue
+     * @var SplPriorityQueue<mixed, mixed>
      */
     protected SplPriorityQueue $queue;
     

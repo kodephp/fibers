@@ -81,10 +81,6 @@ class IntegrationManager
     {
         self::$bindings['app'] = '\think\App';
         self::$bindings['cache'] = '\think\Cache';
-        
-        if (function_exists('app')) {
-            self::integrateWithHelper();
-        }
     }
 
     /**
@@ -135,19 +131,6 @@ class IntegrationManager
     protected static function integrateWithFacade(): void
     {
         self::$services['facade'] = true;
-    }
-
-    /**
-     * 与助函数集成
-     */
-    protected static function integrateWithHelper(): void
-    {
-        if (!function_exists('fibers')) {
-            function fibers(): string
-            {
-                return \Kode\Fibers\Fibers::class;
-            }
-        }
     }
 
     /**

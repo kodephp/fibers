@@ -17,5 +17,6 @@ use Fiber;
  */
 final class WorkerHandle
 {
+    /** @var Fiber<mixed, mixed, mixed, mixed>|null */
     public ?Fiber $fiber = null;
 }

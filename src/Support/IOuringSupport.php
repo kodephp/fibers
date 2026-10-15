@@ -146,7 +146,7 @@ class IOuringSupport
             return null;
         }
 
-        return @$setupFunc(32);
+        return @$setupFunc(32); // @phpstan-ignore callable.nonCallable (io_uring 可选扩展，上文 function_exists 守卫)
     }
 
     protected static function createNativeHandle(string $path, string $mode): mixed

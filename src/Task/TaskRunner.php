@@ -108,8 +108,8 @@ class TaskRunner
         }
 
         throw new FiberException(
-            sprintf('Task failed after %d retries: %s', $maxRetries, $lastException?->getMessage() ?? 'unknown'),
-            (int)($lastException?->getCode() ?? 0),
+            sprintf('Task failed after %d retries: %s', $maxRetries, $lastException->getMessage()),
+            (int) $lastException->getCode(),
             $lastException
         );
     }
@@ -182,7 +182,8 @@ class TaskRunner
         $cancelled = false;
 
         $wrappedTask = static function () use ($task, &$cancelled): mixed {
-            if ($cancelled) {
+            // 取消标志由 cancelCallback 经引用改写，跨调用时序静态不可见，保留运行期护栏
+            if ($cancelled) { // @phpstan-ignore if.alwaysFalse (&$cancelled 跨闭包改写)
                 throw new CancelledException('Task was cancelled before execution');
             }
 

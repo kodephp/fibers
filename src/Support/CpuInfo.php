@@ -257,7 +257,7 @@ class CpuInfo
     /**
      * 获取推荐的并发任务数，基于CPU核心数和可用内存
      *
-     * @param float $memoryPerTaskMB 每个任务估计使用的内存（MB）
+     * @param int $memoryPerTaskMB 每个任务估计使用的内存（MB）
      * @param int $cpuMultiplier CPU核心数的乘数
      * @param bool $forceRefresh 是否强制刷新系统信息缓存
      * @return int 推荐的并发任务数

@@ -81,13 +81,13 @@ use Kode\Fibers\Task\Task;
  * @method static WaitGroup waitGroup(int $delta = 0)
  * @method static Semaphore semaphore(int $permits)
  * @method static Mutex mutex()
- * @method static FiberLocal local(\Closure $initializer = null)
+ * @method static FiberLocal<mixed> local(\Closure $initializer = null)
  * @method static CancellationToken timeoutToken(float $seconds)
  */
 class Fibers
 {
     /** @var string 版本号（与 composer.json 的 version 保持同步，漏改由 VersionGuardTest 拦下） */
-    public const string VERSION = '5.0.12';
+    public const string VERSION = '5.0.13';
 
     /**
      * 获取本包版本号
@@ -218,8 +218,8 @@ class Fibers
     /**
      * 创建纤程本地变量
      *
-     * @param \Closure|null $initializer 首次访问时生成默认值的初始化器
-     * @return FiberLocal
+     * @param  \Closure|null $initializer 首次访问时生成默认值的初始化器
+     * @return FiberLocal<mixed>
      */
     public static function local(?\Closure $initializer = null): FiberLocal
     {
@@ -621,7 +621,7 @@ class Fibers
             return $fallback();
         }
 
-        throw new FiberException('Resilient run failed: ' . $lastError?->getMessage(), (int) ($lastError?->getCode() ?? 0), $lastError);
+        throw new FiberException('Resilient run failed: ' . $lastError->getMessage(), (int) $lastError->getCode(), $lastError);
     }
 
     public static function runtimeBridgeInfo(): array

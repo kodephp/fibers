@@ -270,7 +270,6 @@ class ConnectionPool implements ConnectionPoolInterface
     /**
      * 借出连接执行回调，结束后自动归还
      *
-     * @template T
      * @param callable $callback 接收连接的回调
      * @return mixed 回调返回值
      * @throws FiberException

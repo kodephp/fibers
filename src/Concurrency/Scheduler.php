@@ -56,7 +56,7 @@ final class Scheduler
      * - {@see Timer}      触发到期定时器
      * - {@see Closure}    普通 defer 回调
      *
-     * @var array<int, Closure|Coroutine|Timer|Suspension|Fiber>
+     * @var array<int, Closure|Coroutine|Timer|Suspension|Fiber<mixed, mixed, mixed, mixed>>
      */
     private array $ready = [];
 
@@ -93,7 +93,7 @@ final class Scheduler
     /**
      * Fiber => Coroutine 归属关系（弱引用，协程结束后自动回收）
      *
-     * @var WeakMap<Fiber, Coroutine>
+     * @var WeakMap<Fiber<mixed, mixed, mixed, mixed>, Coroutine>
      */
     private WeakMap $owned;
 
@@ -108,7 +108,7 @@ final class Scheduler
      * 任务在执行途中挂起时，承载它的 worker 不会回到池里（它已被该任务占用），
      * 调度器会为后续任务另借一个，因此池的实际规模等于并发挂起的峰值。
      *
-     * @var Fiber[]
+     * @var list<Fiber<mixed, mixed, mixed, mixed>>
      */
     private array $idleWorkers = [];
 
@@ -240,6 +240,8 @@ final class Scheduler
 
     /**
      * 指定 Fiber 是否由本调度器创建
+     *
+     * @param Fiber<mixed, mixed, mixed, mixed> $fiber
      */
     public function ownsFiber(Fiber $fiber): bool
     {
@@ -302,7 +304,7 @@ final class Scheduler
     /**
      * 向就绪队列投递一个可调度项
      *
-     * @param  Closure|Coroutine|Timer|Suspension|Fiber $item
+     * @param  Closure|Coroutine|Timer|Suspension|Fiber<mixed, mixed, mixed, mixed> $item
      * @internal 供 Suspension 等内部组件使用
      */
     public function enqueue(Closure|Coroutine|Timer|Suspension|Fiber $item): void
@@ -804,6 +806,8 @@ final class Scheduler
 
     /**
      * 新建一个 worker（复用池为空时）
+     *
+     * @return Fiber<mixed, mixed, mixed, mixed>
      */
     private function createWorker(): Fiber
     {

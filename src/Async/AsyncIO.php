@@ -228,7 +228,7 @@ class AsyncIO
             return;
         }
         
-        \Swow\Coroutine::create(function () use ($method, $url, $callback, $options) {
+        \Swow\Coroutine::create(function () use ($callback) {
             $callback(['status' => 200, 'body' => 'swow response']);
         });
     }

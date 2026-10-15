@@ -17,11 +17,11 @@ use Psr\Http\Message\ResponseInterface;
  */
 class HttpClient
 {
-    protected $client;
+    protected mixed $client;
     protected array $clientOptions = [];
     protected bool $useNativeDriver = false;
 
-    public function __construct(array $options = [], $client = null)
+    public function __construct(array $options = [], mixed $client = null)
     {
         $this->clientOptions = $options;
         
@@ -283,7 +283,7 @@ class HttpClient
         ];
     }
 
-    public function getClient()
+    public function getClient(): mixed
     {
         return $this->client;
     }

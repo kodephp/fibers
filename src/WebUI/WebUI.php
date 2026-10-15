@@ -80,6 +80,9 @@ class WebUI
     /**
      * 在已建立的连接上读取一次 HTTP 请求并返回响应（自托管服务器使用）。
      */
+    /**
+     * @param resource $conn
+     */
     protected function serveConnection($conn): void
     {
         stream_set_timeout($conn, 5);
@@ -115,6 +118,9 @@ class WebUI
 
     /**
      * 将响应写回原始 socket 连接。
+     */
+    /**
+     * @param resource $conn
      */
     protected function writeResponse($conn, int $status, array $headers, string $body): void
     {

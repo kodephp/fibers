@@ -102,14 +102,14 @@ if (!function_exists('fiber_cpu_count')) {
 }
 
 if (!function_exists('fiber_go')) {
-    function fiber_go(callable $task, ?float $timeout = null)
+    function fiber_go(callable $task, ?float $timeout = null): mixed
     {
         return Fibers::go($task, $timeout);
     }
 }
 
 if (!function_exists('fiber_with_context')) {
-    function fiber_with_context(array $context, callable $task, ?float $timeout = null)
+    function fiber_with_context(array $context, callable $task, ?float $timeout = null): mixed
     {
         return Fibers::withContext($context, $task, $timeout);
     }
@@ -158,7 +158,7 @@ if (!function_exists('fiber_schedule_distributed_advanced')) {
 }
 
 if (!function_exists('fiber_resilient_run')) {
-    function fiber_resilient_run(callable $task, array $options = [])
+    function fiber_resilient_run(callable $task, array $options = []): mixed
     {
         return Fibers::resilientRun($task, $options);
     }
@@ -172,7 +172,7 @@ if (!function_exists('fiber_concurrent_with_context')) {
 }
 
 if (!function_exists('fiber_schedule_distributed_remote')) {
-    function fiber_schedule_distributed_remote(array $tasks, array $nodes = [], $transport = null): array
+    function fiber_schedule_distributed_remote(array $tasks, array $nodes = [], mixed $transport = null): array
     {
         return Fibers::scheduleDistributedRemote($tasks, $nodes, $transport);
     }
@@ -186,7 +186,7 @@ if (!function_exists('fiber_runtime_bridge_info')) {
 }
 
 if (!function_exists('fiber_run_on_bridge')) {
-    function fiber_run_on_bridge(callable $task, ?string $preferred = null)
+    function fiber_run_on_bridge(callable $task, ?string $preferred = null): mixed
     {
         return Fibers::runOnBridge($task, $preferred);
     }
@@ -196,5 +196,12 @@ if (!function_exists('fiber_profile')) {
     function fiber_profile(callable $task, string $name = 'task'): array
     {
         return Fibers::profile($task, $name);
+    }
+}
+
+if (!function_exists('fibers')) {
+    function fibers(): string
+    {
+        return Fibers::class;
     }
 }
